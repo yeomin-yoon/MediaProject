@@ -1,0 +1,38 @@
+﻿{
+    "FileVersion": 3,
+    "Version": 1,
+    "VersionName": "1.0",
+    "FriendlyName": "Lock On System",
+    "Description": "Reusable lock-on runtime with Lyra bridge integration.",
+    "Category": "Game Features",
+    "CreatedBy": "Codex",
+    "CanContainContent": false,
+    "IsBetaVersion": true,
+    "IsExperimentalVersion": true,
+    "Installed": false,
+    "ExplicitlyLoaded": true,
+    "EnabledByDefault": true,
+    "BuiltInInitialFeatureState": "Active",
+    "Modules": [
+        {
+            "Name": "LockOnSystemRuntime",
+            "Type": "Runtime",
+            "LoadingPhase": "Default"
+        },
+        {
+            "Name": "LockOnSystemLyra",
+            "Type": "Runtime",
+            "LoadingPhase": "Default"
+        }
+    ],
+    "Plugins": [
+        {
+            "Name": "EnhancedInput",
+            "Enabled": true
+        },
+        {
+            "Name": "ModularGameplay",
+            "Enabled": true
+        }
+    ]
+}
