@@ -17,7 +17,7 @@ public class UIExtension : ModuleRules
 				"UMG",
 				"CommonUI",
 				"CommonGame",
-				"GameplayTags"
+				"GameplayTags", "LyraGame"
 			}
 		);
 
