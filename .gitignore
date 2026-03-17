@@ -1,17 +1,13 @@
-# -------------------------------
-# Unreal Engine
-# -------------------------------
+# Unreal Engine 자동 생성
 Binaries/
 DerivedDataCache/
 Intermediate/
 Saved/
 
-# BuildScripts 임시/캐시 (Rider/Unreal 자동 생성)
-BuildScripts/Wobj/
+# Build 스크립트 임시/캐시
+Build/Scripts/obj/
 
-# -------------------------------
-# IDEs
-# -------------------------------
+# IDE
 .vscode/
 .vs/
 *.VC.db
@@ -23,22 +19,17 @@ BuildScripts/Wobj/
 *.xcodeproj
 *.xcworkspace
 
-# -------------------------------
-# Rider IDE 최소 공유 설정
-# -------------------------------
-# 개인 환경 파일 무시
+# Rider 개인 환경
 .idea/workspace.xml
 .idea/tasks.xml
 .idea/dictionaries/
 .idea/.name
 
-# 프로젝트 구조/모듈 정보만 커밋
+# Rider 프로젝트 구조/모듈 정보만 공유
 .idea/modules.xml
 .idea/libraries/
 *.iml
 
-# -------------------------------
 # OS
-# -------------------------------
 .DS_Store
 Thumbs.db
