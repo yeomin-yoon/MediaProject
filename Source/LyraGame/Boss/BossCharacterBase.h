@@ -13,5 +13,7 @@ UCLASS()
 class LYRAGAME_API ABossCharacterBase : public ALyraCharacterWithAbilities
 {
 	GENERATED_BODY()
+public:
+	ABossCharacterBase(const FObjectInitializer& ObjectInitializer = FObjectInitializer::Get());
 	
 };
