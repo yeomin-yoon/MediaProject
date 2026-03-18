@@ -12,12 +12,14 @@
  * 
  */
 UCLASS()
-class LYRAGAME_API ABossCharacterBaseAiController : public AModularAIController, public ILyraTeamAgentInterface
+class LYRAGAME_API ABossCharacterBaseAiController : public AModularAIController
 {
 	GENERATED_BODY()
 public:
 	ABossCharacterBaseAiController(const FObjectInitializer& ObjectInitializer = FObjectInitializer::Get());
 protected:
+	
 	UPROPERTY(EditDefaultsOnly, Category = "AI")
 	 TObjectPtr<UStateTreeAIComponent> StateTreeComp;
+	 virtual void OnPossess(APawn* InPawn) override;
 };

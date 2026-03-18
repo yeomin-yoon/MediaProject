@@ -9,3 +9,9 @@ ABossCharacterBaseAiController::ABossCharacterBaseAiController(const FObjectInit
 	StateTreeComp = CreateDefaultSubobject<UStateTreeAIComponent>(
 	TEXT("StateTreeAIComponent"));
 }
+
+void ABossCharacterBaseAiController::OnPossess(APawn* InPawn)
+{
+	Super::OnPossess(InPawn);
+	StateTreeComp->StartLogic();
+}

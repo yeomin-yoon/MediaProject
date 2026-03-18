@@ -1,12 +1,17 @@
-// Fill out your copyright notice in the Description page of Project Settings.
-
-
 #include "Boss/BossCharacterBase.h"
 #include "Boss/BossCharacterBaseAiController.h"
+#include "Teams/LyraTeamSubsystem.h"
 
 ABossCharacterBase::ABossCharacterBase(const FObjectInitializer& ObjectInitializer)
-    : Super(ObjectInitializer)
+	: Super(ObjectInitializer)
 {
-    AIControllerClass = ABossCharacterBaseAiController::StaticClass();
-    AutoPossessAI = EAutoPossessAI::PlacedInWorldOrSpawned;
+	AIControllerClass = ABossCharacterBaseAiController::StaticClass();
+	AutoPossessAI = EAutoPossessAI::PlacedInWorldOrSpawned;
 }
+
+void ABossCharacterBase::BeginPlay()
+{
+	Super::BeginPlay();
+}
+
+
