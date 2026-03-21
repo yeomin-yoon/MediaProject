@@ -19,7 +19,8 @@ public class ActionCombatRuntime : ModuleRules
         PrivateDependencyModuleNames.AddRange(
             new string[]
             {
-                "GameplayTasks"
+                "GameplayTasks",
+                "Projects"
             });
     }
 }

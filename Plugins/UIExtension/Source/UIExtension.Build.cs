@@ -12,6 +12,7 @@ public class UIExtension : ModuleRules
 				"Core",
 				"CoreUObject",
 				"Engine",
+				"ActionCombatRuntime",
 				"SlateCore",
 				"Slate",
 				"UMG",
