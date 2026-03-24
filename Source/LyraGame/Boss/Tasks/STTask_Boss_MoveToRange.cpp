@@ -7,8 +7,6 @@
 
 bool FSTTask_Boss_MoveToRange::Link(FStateTreeLinker& Linker)
 {
-	// TODO: AIControllerHandle 등록
-	// 힌트: Linker.LinkExternalData(AIControllerHandle);
 	Linker.LinkExternalData(AIControllerHandle);
 	return true;
 }
@@ -67,11 +65,12 @@ EStateTreeRunStatus FSTTask_Boss_MoveToRange::Tick(FStateTreeExecutionContext& C
 
 	const float Dist = FVector::Dist(BossController->GetPawn()->GetActorLocation(), Target->GetActorLocation());
 	UE_LOG(LogTemp, Warning, TEXT("Dist: %.1f / Radius: %.1f"), Dist, Data.AcceptableRadius);
-	if (Dist <= Data.AcceptableRadius+150)
+	if (Dist < Data.AcceptableRadius)
 	{
 		UE_LOG(LogTemp, Warning, TEXT("Succed"));
 		return EStateTreeRunStatus::Succeeded;
 	}
+	
 
 	BossController->MoveToActor(Target, Data.AcceptableRadius);
 	return EStateTreeRunStatus::Running;
