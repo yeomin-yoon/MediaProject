@@ -23,6 +23,11 @@
             "Name": "ActionCombatLyraBridge",
             "Type": "Runtime",
             "LoadingPhase": "Default"
+        },
+        {
+            "Name": "ActionCombatEditor",
+            "Type": "Editor",
+            "LoadingPhase": "Default"
         }
     ],
     "Plugins": [
