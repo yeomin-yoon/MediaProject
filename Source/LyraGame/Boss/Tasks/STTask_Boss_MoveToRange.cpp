@@ -66,8 +66,10 @@ EStateTreeRunStatus FSTTask_Boss_MoveToRange::Tick(FStateTreeExecutionContext& C
 	}
 
 	const float Dist = FVector::Dist(BossController->GetPawn()->GetActorLocation(), Target->GetActorLocation());
-	if (Dist <= Data.AcceptableRadius)
+	UE_LOG(LogTemp, Warning, TEXT("Dist: %.1f / Radius: %.1f"), Dist, Data.AcceptableRadius);
+	if (Dist <= Data.AcceptableRadius+150)
 	{
+		UE_LOG(LogTemp, Warning, TEXT("Succed"));
 		return EStateTreeRunStatus::Succeeded;
 	}
 
