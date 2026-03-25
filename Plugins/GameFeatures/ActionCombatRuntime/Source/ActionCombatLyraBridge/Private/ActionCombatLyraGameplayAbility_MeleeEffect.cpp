@@ -3,6 +3,7 @@
 #include "ActionCombatLyraBridgeTags.h"
 #include "AbilityTask_WaitActionCombatMeleeHit.h"
 #include "ActionCombatMeleeTraceComponent.h"
+#include "ActionCombatRuntimeLog.h"
 
 #include "Abilities/Tasks/AbilityTask_WaitGameplayEvent.h"
 #include "AbilitySystemComponent.h"
@@ -32,6 +33,15 @@ void UActionCombatLyraGameplayAbility_MeleeEffect::ActivateAbility(const FGamepl
     }
 
     HitActorsDuringActivation.Reset();
+
+    UE_LOG(
+        LogActionCombatRuntime,
+        Log,
+        TEXT("[MeleeAbility:%s] Activated Ability=%s TraceSource=%s TargetEffect=%s"),
+        *GetPathNameSafe(GetAvatarActorFromActorInfo()),
+        *GetNameSafe(GetClass()),
+        *ResolveRequestedTraceSourceId().ToString(),
+        *GetNameSafe(TargetEffectClass));
 
     WaitForMeleeHitTask = UAbilityTask_WaitActionCombatMeleeHit::WaitActionCombatMeleeHit(this, ResolveRequestedTraceSourceId(), bIncludeAttachedActors, false, false);
     if (WaitForMeleeHitTask)
@@ -113,12 +123,25 @@ bool UActionCombatLyraGameplayAbility_MeleeEffect::ApplyEffectToRecordedHit(AAct
 {
     if ((HitActor == nullptr) || (TargetEffectClass == nullptr))
     {
+        UE_LOG(
+            LogActionCombatRuntime,
+            Warning,
+            TEXT("[MeleeAbility:%s] ApplyEffect skipped HitActor=%s TargetEffect=%s"),
+            *GetPathNameSafe(GetAvatarActorFromActorInfo()),
+            *GetNameSafe(HitActor),
+            *GetNameSafe(TargetEffectClass));
         return false;
     }
 
     UAbilitySystemComponent* TargetAbilitySystemComponent = UAbilitySystemGlobals::GetAbilitySystemComponentFromActor(HitActor);
     if (TargetAbilitySystemComponent == nullptr)
     {
+        UE_LOG(
+            LogActionCombatRuntime,
+            Warning,
+            TEXT("[MeleeAbility:%s] ApplyEffect skipped because target ASC was not found for HitActor=%s"),
+            *GetPathNameSafe(GetAvatarActorFromActorInfo()),
+            *GetNameSafe(HitActor));
         return false;
     }
 
@@ -126,6 +149,12 @@ bool UActionCombatLyraGameplayAbility_MeleeEffect::ApplyEffectToRecordedHit(AAct
     FGameplayEffectSpec* EffectSpec = EffectSpecHandle.Data.Get();
     if (EffectSpec == nullptr)
     {
+        UE_LOG(
+            LogActionCombatRuntime,
+            Warning,
+            TEXT("[MeleeAbility:%s] ApplyEffect skipped because effect spec could not be created for %s"),
+            *GetPathNameSafe(GetAvatarActorFromActorInfo()),
+            *GetNameSafe(TargetEffectClass));
         return false;
     }
 
@@ -153,6 +182,16 @@ bool UActionCombatLyraGameplayAbility_MeleeEffect::ApplyEffectToRecordedHit(AAct
         }
 
         EffectSpec->SetSetByCallerMagnitude(LyraGameplayTags::SetByCaller_Damage, BaseDamage * RecordedHit.DamageMultiplier);
+
+        UE_LOG(
+            LogActionCombatRuntime,
+            Log,
+            TEXT("[MeleeAbility:%s] PreparedDamage HitActor=%s BaseDamage=%.2f Multiplier=%.2f FinalDamage=%.2f"),
+            *GetPathNameSafe(GetAvatarActorFromActorInfo()),
+            *GetNameSafe(HitActor),
+            BaseDamage,
+            RecordedHit.DamageMultiplier,
+            BaseDamage * RecordedHit.DamageMultiplier);
     }
 
     if (DamageMultiplierSetByCallerTag.IsValid())
@@ -161,6 +200,14 @@ bool UActionCombatLyraGameplayAbility_MeleeEffect::ApplyEffectToRecordedHit(AAct
     }
 
     TargetAbilitySystemComponent->ApplyGameplayEffectSpecToSelf(*EffectSpec);
+
+    UE_LOG(
+        LogActionCombatRuntime,
+        Log,
+        TEXT("[MeleeAbility:%s] AppliedEffect HitActor=%s Effect=%s"),
+        *GetPathNameSafe(GetAvatarActorFromActorInfo()),
+        *GetNameSafe(HitActor),
+        *GetNameSafe(TargetEffectClass));
     return true;
 }
 
@@ -169,6 +216,16 @@ void UActionCombatLyraGameplayAbility_MeleeEffect::HandleRecordedHit(UActionComb
     AActor* HitActor = RecordedHit.HitResult.GetActor();
     K2_OnRecordedHit(HitActor, RecordedHit, HitIndex);
 
+    UE_LOG(
+        LogActionCombatRuntime,
+        Log,
+        TEXT("[MeleeAbility:%s] HandleRecordedHit HitActor=%s Component=%s Index=%d Authority=%s"),
+        *GetPathNameSafe(GetAvatarActorFromActorInfo()),
+        *GetNameSafe(HitActor),
+        *GetNameSafe(RecordedHit.HitResult.GetComponent()),
+        HitIndex,
+        (CurrentActorInfo && CurrentActorInfo->IsNetAuthority()) ? TEXT("true") : TEXT("false"));
+
     if ((CurrentActorInfo == nullptr) || !CurrentActorInfo->IsNetAuthority())
     {
         return;
@@ -176,6 +233,12 @@ void UActionCombatLyraGameplayAbility_MeleeEffect::HandleRecordedHit(UActionComb
 
     if (!ShouldAcceptHitActor(HitActor))
     {
+        UE_LOG(
+            LogActionCombatRuntime,
+            Log,
+            TEXT("[MeleeAbility:%s] Rejected duplicate or invalid hit for HitActor=%s"),
+            *GetPathNameSafe(GetAvatarActorFromActorInfo()),
+            *GetNameSafe(HitActor));
         return;
     }
 

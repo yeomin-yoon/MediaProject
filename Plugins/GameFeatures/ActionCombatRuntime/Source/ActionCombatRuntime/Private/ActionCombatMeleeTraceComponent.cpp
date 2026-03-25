@@ -66,6 +66,14 @@ void UActionCombatMeleeTraceComponent::StopHitWindow()
     HitActorsThisWindow.Reset();
     SetComponentTickEnabled(false);
 
+    UE_LOG(
+        LogActionCombatRuntime,
+        Log,
+        TEXT("[%s] MeleeHitWindowStopped Window=%s Source=%s"),
+        *GetPathName(),
+        *ClosedWindowName.ToString(),
+        *TraceSourceId.ToString());
+
     OnHitWindowStopped.Broadcast(this, ClosedWindowName);
 }
 
@@ -185,6 +193,18 @@ bool UActionCombatMeleeTraceComponent::StartHitWindowInternal(FName WindowName, 
     }
 
     SetComponentTickEnabled(true);
+
+    UE_LOG(
+        LogActionCombatRuntime,
+        Log,
+        TEXT("[%s] MeleeHitWindowStarted Window=%s Source=%s TracePoints=%d Radius=%.2f Channel=%d"),
+        *GetPathName(),
+        *ActiveWindowName.ToString(),
+        *TraceSourceId.ToString(),
+        ActiveTraceProfile.TracePoints.Num(),
+        ActiveTraceProfile.SweepRadius,
+        static_cast<int32>(ActiveTraceProfile.TraceChannel));
+
     OnHitWindowStarted.Broadcast(this, ActiveWindowName);
 
     return true;
@@ -265,14 +285,28 @@ void UActionCombatMeleeTraceComponent::TraceActiveWindow()
 
         FCollisionQueryParams QueryParams(SCENE_QUERY_STAT(ActionCombatMeleeTrace), ActiveTraceProfile.bTraceComplex, Owner);
         QueryParams.bReturnPhysicalMaterial = true;
-        QueryParams.AddIgnoredActor(Owner);
-
-        if (ActiveTraceProfile.bIgnoreOwnerAttachedActors)
+        const auto AddIgnoredActorAndAttached = [this, &QueryParams](AActor* ActorToIgnore)
         {
-            TArray<AActor*> AttachedActors;
-            Owner->GetAttachedActors(AttachedActors);
-            QueryParams.AddIgnoredActors(AttachedActors);
-        }
+            if (ActorToIgnore == nullptr)
+            {
+                return;
+            }
+
+            QueryParams.AddIgnoredActor(ActorToIgnore);
+
+            if (ActiveTraceProfile.bIgnoreOwnerAttachedActors)
+            {
+                TArray<AActor*> AttachedActors;
+                ActorToIgnore->GetAttachedActors(AttachedActors);
+                QueryParams.AddIgnoredActors(AttachedActors);
+            }
+        };
+
+        // Ignore the spawned weapon actor itself, the actor that owns the weapon,
+        // and the instigator pawn so melee traces do not hit the attacker.
+        AddIgnoredActorAndAttached(Owner);
+        AddIgnoredActorAndAttached(Owner->GetOwner());
+        AddIgnoredActorAndAttached(Owner->GetInstigator());
 
         TArray<FHitResult> HitResults;
         if (ActiveTraceProfile.SweepRadius > KINDA_SMALL_NUMBER)
@@ -295,6 +329,15 @@ void UActionCombatMeleeTraceComponent::TraceActiveWindow()
                 ActiveTraceProfile.TraceChannel,
                 QueryParams);
         }
+
+        // When an actor has both a hurtbox and regular collision, process hurtboxes first.
+        // This keeps dedupe-by-actor from recording the capsule or mesh instead of the hurtbox.
+        HitResults.StableSort([](const FHitResult& A, const FHitResult& B)
+        {
+            const bool bAHurtbox = Cast<UActionCombatHurtboxComponent>(A.GetComponent()) != nullptr;
+            const bool bBHurtbox = Cast<UActionCombatHurtboxComponent>(B.GetComponent()) != nullptr;
+            return bAHurtbox && !bBHurtbox;
+        });
 
         if (bDrawDebug)
         {
@@ -330,10 +373,19 @@ void UActionCombatMeleeTraceComponent::TraceActiveWindow()
 
 bool UActionCombatMeleeTraceComponent::RecordHit(const FHitResult& HitResult)
 {
+    const AActor* TraceOwner = GetOwner();
     AActor* HitActor = HitResult.GetActor();
-    if (!HitActor || HitActor == GetOwner())
+    if (!HitActor || HitActor == TraceOwner)
     {
         return false;
+    }
+
+    if (TraceOwner != nullptr)
+    {
+        if (HitActor == TraceOwner->GetOwner() || HitActor == TraceOwner->GetInstigator())
+        {
+            return false;
+        }
     }
 
     if (ActiveTraceProfile.DedupeMode == EActionCombatMeleeHitDedupeMode::OncePerWindow && WasActorAlreadyHit(HitActor))
@@ -349,6 +401,19 @@ bool UActionCombatMeleeTraceComponent::RecordHit(const FHitResult& HitResult)
         RecordedHit.HitZoneTag = Hurtbox->GetHitZoneTag();
         RecordedHit.DamageMultiplier = Hurtbox->GetDamageMultiplier();
     }
+
+    UE_LOG(
+        LogActionCombatRuntime,
+        Log,
+        TEXT("[%s] MeleeRecordedHit Window=%s Source=%s Actor=%s Component=%s Bone=%s Zone=%s Multiplier=%.2f"),
+        *GetPathName(),
+        *ActiveWindowName.ToString(),
+        *TraceSourceId.ToString(),
+        *GetNameSafe(HitActor),
+        *GetNameSafe(HitResult.GetComponent()),
+        *HitResult.BoneName.ToString(),
+        *RecordedHit.HitZoneTag.ToString(),
+        RecordedHit.DamageMultiplier);
 
     const int32 HitIndex = RecordedHits.Add(RecordedHit);
     if (ActiveTraceProfile.DedupeMode == EActionCombatMeleeHitDedupeMode::OncePerWindow)
