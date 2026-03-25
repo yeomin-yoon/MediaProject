@@ -29,6 +29,11 @@ public:
     void ConfigureForLyraWeaponTraces();
 
 protected:
+    virtual void OnRegister() override;
+
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Hurtbox")
+    bool bAutoConfigureForLyraWeaponTraces = true;
+
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Hurtbox")
     FGameplayTag HitZoneTag;
 

@@ -11,6 +11,16 @@ UActionCombatHurtboxComponent::UActionCombatHurtboxComponent(const FObjectInitia
     bUseAttachParentBound = true;
 }
 
+void UActionCombatHurtboxComponent::OnRegister()
+{
+    Super::OnRegister();
+
+    if (bAutoConfigureForLyraWeaponTraces)
+    {
+        ConfigureForLyraWeaponTraces();
+    }
+}
+
 void UActionCombatHurtboxComponent::ConfigureForLyraWeaponTraces()
 {
     SetCollisionEnabled(ECollisionEnabled::QueryOnly);
