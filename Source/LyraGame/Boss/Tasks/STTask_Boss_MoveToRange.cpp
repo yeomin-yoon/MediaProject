@@ -3,7 +3,17 @@
 #include "StateTreeLinker.h"
 #include "AIController.h"
 #include "Boss/BossCharacterBaseAiController.h"
+#include "Boss/BossCharacterBase.h"
 
+// 항상 BossCharacterBase.AttackRange를 사용
+static float GetAttackRange(AAIController* Controller)
+{
+	if (ABossCharacterBase* Boss = Cast<ABossCharacterBase>(Controller->GetPawn()))
+	{
+		return Boss->AttackRange;
+	}
+	return 200.f; // fallback
+}
 
 bool FSTTask_Boss_MoveToRange::Link(FStateTreeLinker& Linker)
 {
@@ -14,8 +24,6 @@ bool FSTTask_Boss_MoveToRange::Link(FStateTreeLinker& Linker)
 EStateTreeRunStatus FSTTask_Boss_MoveToRange::EnterState(FStateTreeExecutionContext& Context,
                                                           const FStateTreeTransitionResult& Transition) const
 {
-	FInstanceDataType& Data = Context.GetInstanceData(*this);
-
 	AAIController* RawController = Context.GetExternalDataPtr(AIControllerHandle);
 	ABossCharacterBaseAiController* BossController = Cast<ABossCharacterBaseAiController>(RawController);
 	if (!BossController)
@@ -35,21 +43,21 @@ EStateTreeRunStatus FSTTask_Boss_MoveToRange::EnterState(FStateTreeExecutionCont
 		return EStateTreeRunStatus::Failed;
 	}
 
+	const float Range = GetAttackRange(BossController);
 	const float Dist = FVector::Dist(BossPawn->GetActorLocation(), Target->GetActorLocation());
-	if (Dist <= Data.AcceptableRadius)
+	if (Dist <= Range)
 	{
 		return EStateTreeRunStatus::Succeeded;
 	}
 
-	BossController->MoveToActor(Target, Data.AcceptableRadius);
+	// 50.f = 캡슐 충돌 허용치. Range로 넘기면 NavMesh가 경계에 세워서 Tick 판정 불가.
+	BossController->MoveToActor(Target, 50.f);
 	return EStateTreeRunStatus::Running;
 }
 
 EStateTreeRunStatus FSTTask_Boss_MoveToRange::Tick(FStateTreeExecutionContext& Context,
                                                     const float DeltaTime) const
 {
-	FInstanceDataType& Data = Context.GetInstanceData(*this);
-
 	AAIController* RawController = Context.GetExternalDataPtr(AIControllerHandle);
 	ABossCharacterBaseAiController* BossController = Cast<ABossCharacterBaseAiController>(RawController);
 	if (!BossController || !BossController->GetPawn())
@@ -63,16 +71,13 @@ EStateTreeRunStatus FSTTask_Boss_MoveToRange::Tick(FStateTreeExecutionContext& C
 		return EStateTreeRunStatus::Failed;
 	}
 
+	const float Range = GetAttackRange(BossController);
 	const float Dist = FVector::Dist(BossController->GetPawn()->GetActorLocation(), Target->GetActorLocation());
-	UE_LOG(LogTemp, Warning, TEXT("Dist: %.1f / Radius: %.1f"), Dist, Data.AcceptableRadius);
-	if (Dist < Data.AcceptableRadius)
+	if (Dist <= Range)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("Succed"));
 		return EStateTreeRunStatus::Succeeded;
 	}
-	
 
-	BossController->MoveToActor(Target, Data.AcceptableRadius);
 	return EStateTreeRunStatus::Running;
 }
 

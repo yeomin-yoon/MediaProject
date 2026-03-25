@@ -17,10 +17,7 @@ USTRUCT()
 struct FSTTask_Boss_MoveToRangeInstanceData
 {
 	GENERATED_BODY()
-
-	// 공격 패턴마다 에디터에서 다르게 설정
-	UPROPERTY(EditAnywhere)
-	float AcceptableRadius = 200.f;
+	// BossCharacterBase.AttackRange를 런타임에 읽음 → 여기 별도 값 없음
 };
 
 /**

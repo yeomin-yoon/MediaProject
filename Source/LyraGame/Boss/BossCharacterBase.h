@@ -18,6 +18,11 @@ public:
 	UPROPERTY(BlueprintReadOnly, Category = "AI")
 	TObjectPtr<ABossCharacterBaseAiController> BossAIController;
 
+	// 보스의 기본 공격 사정거리. MoveToRange Task / AutoTargeting Notify가 이 값을 공통 사용.
+	// BP_TestBoss 등 각 보스 BP에서 값만 바꾸면 Task/Notify 코드 수정 없이 적용됨.
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Boss|Combat")
+	float AttackRange = 600.f;
+
 protected:
 	virtual void BeginPlay() override;
 
