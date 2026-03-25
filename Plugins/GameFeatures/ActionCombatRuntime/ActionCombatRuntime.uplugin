@@ -5,7 +5,7 @@
     "FriendlyName": "Action Combat Runtime",
     "Description": "Runtime support for action-combat flow, Lyra input and GAS bridging, and weapon-following melee hit detection.",
     "Category": "Game Features",
-    "CreatedBy": "Me",
+    "CreatedBy": "OS",
     "CanContainContent": false,
     "IsBetaVersion": true,
     "IsExperimentalVersion": true,
