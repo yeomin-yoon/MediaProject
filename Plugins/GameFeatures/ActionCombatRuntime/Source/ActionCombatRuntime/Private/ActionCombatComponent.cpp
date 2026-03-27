@@ -245,9 +245,19 @@ bool UActionCombatComponent::TryForceCommitBufferedCommand()
     if (PendingInterruptCommand.IsValid())
     {
         const FActionCombatBufferedCommandState InterruptCommand = PendingInterruptCommand;
+        const FActionCombatBufferedCommandState SavedBufferedCommand = BufferedCommand;
         PendingInterruptCommand.Reset();
         BufferedCommand.Reset();
         const bool bStarted = ResolveTransitionAndStart(ActiveActionState.ActionTag, InterruptCommand);
+        if (!bStarted)
+        {
+            BufferedCommand = SavedBufferedCommand;
+        }
+        else if (SavedBufferedCommand.IsValid())
+        {
+            OnBufferedCommandChanged.Broadcast(BufferedCommand.CommandTag);
+        }
+
         UpdateReplicatedStateFromLocal();
         return bStarted;
     }
@@ -370,11 +380,9 @@ bool UActionCombatComponent::HandleCommandRequestInternal(const FActionCombatBuf
 
     if (DodgeCommandTag.IsValid() && CommandRequest.CommandTag == DodgeCommandTag)
     {
-        BufferedCommand.Reset();
         PendingInterruptCommand = CommandRequest;
         UpdateReplicatedStateFromLocal();
-        OnBufferedCommandChanged.Broadcast(BufferedCommand.CommandTag);
-        LogCommandFlow(FString::Printf(TEXT("InterruptQueued %s"), *FormatCommandState(CommandRequest)));
+        LogCommandFlow(FString::Printf(TEXT("InterruptQueued %s BufferedPreserved=%s"), *FormatCommandState(CommandRequest), *FormatCommandState(BufferedCommand)));
         TryCommitPendingCommands();
         return true;
     }
@@ -382,6 +390,16 @@ bool UActionCombatComponent::HandleCommandRequestInternal(const FActionCombatBuf
     if (!ActiveActionDefinition)
     {
         LogCommandFlow(FString::Printf(TEXT("RequestRejected NoActiveDefinition Command=%s"), *FormatCommandState(CommandRequest)));
+        return false;
+    }
+
+    if (ActiveActionState.NormalizedProgress < ActiveActionDefinition->QueueWindowStartsAtNormalizedTime)
+    {
+        LogCommandFlow(FString::Printf(
+            TEXT("RequestRejected QueueNotOpen Command=%s Progress=%.2f OpensAt=%.2f"),
+            *FormatCommandState(CommandRequest),
+            ActiveActionState.NormalizedProgress,
+            ActiveActionDefinition->QueueWindowStartsAtNormalizedTime));
         return false;
     }
 
@@ -551,16 +569,25 @@ void UActionCombatComponent::TryCommitPendingCommands()
         && ActiveActionState.NormalizedProgress >= ActiveActionDefinition->DodgeCancelStartsAtNormalizedTime)
     {
         const FActionCombatBufferedCommandState InterruptCommand = PendingInterruptCommand;
+        const FActionCombatBufferedCommandState SavedBufferedCommand = BufferedCommand;
         PendingInterruptCommand.Reset();
         BufferedCommand.Reset();
-        OnBufferedCommandChanged.Broadcast(BufferedCommand.CommandTag);
-        LogCommandFlow(FString::Printf(TEXT("InterruptCommitted %s"), *FormatCommandState(InterruptCommand)));
 
         if (ResolveTransitionAndStart(ActiveActionState.ActionTag, InterruptCommand))
         {
+            if (SavedBufferedCommand.IsValid())
+            {
+                OnBufferedCommandChanged.Broadcast(BufferedCommand.CommandTag);
+            }
+
+            LogCommandFlow(FString::Printf(TEXT("InterruptCommitted %s"), *FormatCommandState(InterruptCommand)));
             UpdateReplicatedStateFromLocal();
             return;
         }
+
+        BufferedCommand = SavedBufferedCommand;
+        UpdateReplicatedStateFromLocal();
+        LogCommandFlow(FString::Printf(TEXT("InterruptRejected %s BufferedKept=%s"), *FormatCommandState(InterruptCommand), *FormatCommandState(BufferedCommand)));
     }
 
     if (BufferedCommand.IsValid()
