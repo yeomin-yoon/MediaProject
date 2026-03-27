@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(grep -i \"\\\\.h$\")",
+      "Bash(cmd /c \"dir \\\\\"C:\\\\Program Files\\\\Epic Games\\\\UE_5.5\\\\Engine\\\\Source\\\\Runtime\\\\GameplayAbilities\\\\Public\\\\\" /b 2>&1 | head -5\")",
+      "Bash(cmd /c \"findstr /n \\\\\"AbilityEnded\\\\\" \\\\\"C:\\\\Program Files\\\\Epic Games\\\\UE_5.5\\\\Engine\\\\Source\\\\Runtime\\\\GameplayAbilities\\\\Public\\\\AbilitySystemComponent.h\\\\\" 2>&1 | head -20\")",
+      "Bash(cmd /c \"dir \\\\\"C:\\\\Program Files\\\\Epic Games\\\\UE_5.5\\\\Engine\\\\Source\\\\Runtime\\\\GameplayAbilities\\\\Public\\\\AbilitySystemComponent.h\\\\\"\")",
+      "Bash(cmd /c \"where /r \\\\\"C:\\\\Program Files\\\\Epic Games\\\\UE_5.5\\\\\" AbilitySystemComponent.h 2>&1\")",
+      "Bash(cmd /c \"where /r \\\\\"C:\\\\Program Files\\\\Epic Games\\\\UE_5.5\\\\\" AbilitySystemComponent.h\")",
+      "Bash(powershell -Command \"Get-ChildItem -Path 'C:\\\\Program Files\\\\Epic Games\\\\UE_5.5' -Filter 'AbilitySystemComponent.h' -Recurse -ErrorAction SilentlyContinue | Select-Object FullName\")",
+      "Bash(powershell -Command \"Select-String -Path 'C:\\\\Program Files\\\\Epic Games\\\\UE_5.5\\\\Engine\\\\Plugins\\\\Runtime\\\\GameplayAbilities\\\\Source\\\\GameplayAbilities\\\\Public\\\\AbilitySystemComponent.h' -Pattern 'AbilityEnded' | Select-Object LineNumber, Line\")",
+      "Bash(ls \"C:\\\\GitProjects\\\\MediaProject\\\\Plugins\\\\UIExtension\\\\Source\\\\Private\"\" | grep AutoTargeting; ls \"C:GitProjectsMediaProjectPluginsUIExtensionSourcePublic\"\")"
+    ]
+  }
+}
