@@ -33,3 +33,6 @@ Build/Scripts/obj/
 # OS
 .DS_Store
 Thumbs.db
+
+# 클로드
+claude.md
