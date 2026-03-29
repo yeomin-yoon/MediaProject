@@ -1,9 +1,15 @@
-Binaries
-DerivedDataCache
-Intermediate
-Saved
-.vscode
-.vs
+# Unreal Engine 자동 생성
+Binaries/
+DerivedDataCache/
+Intermediate/
+Saved/
+
+# Build 스크립트 임시/캐시
+Build/Scripts/obj/
+
+# IDE
+.vscode/
+.vs/
 *.VC.db
 *.opensdf
 *.opendb
@@ -12,4 +18,21 @@ Saved
 *.suo
 *.xcodeproj
 *.xcworkspace
+
+# Rider 개인 환경
+.idea/workspace.xml
+.idea/tasks.xml
+.idea/dictionaries/
+.idea/.name
+
+# Rider 프로젝트 구조/모듈 정보만 공유
+.idea/modules.xml
+.idea/libraries/
+*.iml
+
+# OS
+.DS_Store
+Thumbs.db
+
+# 클로드
 claude.md
