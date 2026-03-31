@@ -274,6 +274,21 @@ bool UActionCombatComponent::TryForceCommitBufferedCommand()
     return false;
 }
 
+void UActionCombatComponent::InterruptActiveAction()
+{
+    if (!HasRuntimeAuthority() || !ActiveActionState.ActionTag.IsValid())
+    {
+        return;
+    }
+
+    BufferedCommand.Reset();
+    PendingInterruptCommand.Reset();
+    OnBufferedCommandChanged.Broadcast(BufferedCommand.CommandTag);
+    EndActiveAction(true);
+    UpdateReplicatedStateFromLocal();
+    LogCommandFlow(TEXT("ActiveActionInterrupted"));
+}
+
 bool UActionCombatComponent::StartActionFromTag(FGameplayTag ActionTag)
 {
     if (!HasRuntimeAuthority())
@@ -436,6 +451,13 @@ bool UActionCombatComponent::StartActionFromDefinition(const FActionCombatAction
 {
     if (!ActionDefinition)
     {
+        return false;
+    }
+
+    FString OwnerTagFailureReason;
+    if (!DoesOwnerMeetActionTagRequirements(ActionDefinition, OwnerTagFailureReason))
+    {
+        LogCommandFlow(FString::Printf(TEXT("ActionRejected Tag=%s Reason=%s"), *ActionDefinition->ActionTag.ToString(), *OwnerTagFailureReason));
         return false;
     }
 
@@ -802,6 +824,51 @@ const FActionCombatTransitionDefinition* UActionCombatComponent::FindTransitionI
     }
 
     return nullptr;
+}
+
+bool UActionCombatComponent::DoesOwnerMeetActionTagRequirements(const FActionCombatActionDefinition* ActionDefinition, FString& OutFailureReason) const
+{
+    OutFailureReason.Reset();
+
+    if (!ActionDefinition)
+    {
+        OutFailureReason = TEXT("MissingActionDefinition");
+        return false;
+    }
+
+    if (ActionDefinition->RequiredOwnerTags.IsEmpty() && ActionDefinition->BlockedOwnerTags.IsEmpty())
+    {
+        return true;
+    }
+
+    UAbilitySystemComponent* AbilitySystemComponent = ResolveAbilitySystemComponent();
+    if (!AbilitySystemComponent)
+    {
+        if (!ActionDefinition->RequiredOwnerTags.IsEmpty())
+        {
+            OutFailureReason = TEXT("MissingAbilitySystemComponentForRequiredOwnerTags");
+            return false;
+        }
+
+        return true;
+    }
+
+    FGameplayTagContainer OwnerTags;
+    AbilitySystemComponent->GetOwnedGameplayTags(OwnerTags);
+
+    if (!ActionDefinition->RequiredOwnerTags.IsEmpty() && !OwnerTags.HasAll(ActionDefinition->RequiredOwnerTags))
+    {
+        OutFailureReason = FString::Printf(TEXT("MissingOwnerTags Required=%s Current=%s"), *ActionDefinition->RequiredOwnerTags.ToStringSimple(), *OwnerTags.ToStringSimple());
+        return false;
+    }
+
+    if (!ActionDefinition->BlockedOwnerTags.IsEmpty() && OwnerTags.HasAny(ActionDefinition->BlockedOwnerTags))
+    {
+        OutFailureReason = FString::Printf(TEXT("BlockedByOwnerTags Blocked=%s Current=%s"), *ActionDefinition->BlockedOwnerTags.ToStringSimple(), *OwnerTags.ToStringSimple());
+        return false;
+    }
+
+    return true;
 }
 
 bool UActionCombatComponent::TryProcessActionResourceCosts(const FActionCombatActionDefinition* ActionDefinition, FString& OutFailureReason)

@@ -219,6 +219,9 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Action Combat|Runtime")
     bool TryForceCommitBufferedCommand();
 
+    UFUNCTION(BlueprintCallable, Category = "Action Combat|Runtime")
+    void InterruptActiveAction();
+
     UFUNCTION(BlueprintCallable, Category = "Action Combat|Debug")
     bool StartActionFromTag(FGameplayTag ActionTag);
 
@@ -287,6 +290,7 @@ private:
     bool IsCurrentActionFinished() const;
     const FActionCombatActionDefinition* FindActionDefinitionInLayers(const FGameplayTag& ActionTag, const UActionCombatStyleData*& OutSourceStyle) const;
     const FActionCombatTransitionDefinition* FindTransitionInLayers(const FGameplayTag& FromActionTag, const FActionCombatBufferedCommandState& CommandRequest) const;
+    bool DoesOwnerMeetActionTagRequirements(const FActionCombatActionDefinition* ActionDefinition, FString& OutFailureReason) const;
     bool TryProcessActionResourceCosts(const FActionCombatActionDefinition* ActionDefinition, FString& OutFailureReason);
     UAbilitySystemComponent* ResolveAbilitySystemComponent() const;
     static FString FormatAttributeName(const FGameplayAttribute& Attribute);

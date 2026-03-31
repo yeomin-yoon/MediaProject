@@ -9,8 +9,11 @@
 class UAbilityTask_WaitActionCombatMeleeHit;
 class UAbilityTask_WaitGameplayEvent;
 class UGameplayEffect;
+class UActionCombatLyraGuardComponent;
 class UActionCombatMeleeTraceComponent;
 struct FTimerHandle;
+enum class EActionCombatLyraGuardOutcome : uint8;
+struct FActionCombatLyraGuardResult;
 
 UCLASS(Abstract, Blueprintable)
 class ACTIONCOMBATLYRABRIDGE_API UActionCombatLyraGameplayAbility_MeleeEffect : public UActionCombatLyraGameplayAbility_Action
@@ -66,8 +69,35 @@ protected:
     UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Action Combat|Melee")
     FGameplayTag DamageMultiplierSetByCallerTag;
 
+    UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Action Combat|Guard")
+    bool bCanBeBlocked = true;
+
+    UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Action Combat|Dodge")
+    bool bIgnoreTargetDodgeIFrame = false;
+
+    UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Action Combat|Dodge", meta = (Categories = "Combat.State"))
+    FGameplayTag TargetDodgeIFrameTag;
+
+    UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Action Combat|Guard", meta = (ClampMin = "0.0"))
+    float GuardDamage = 20.0f;
+
+    UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Action Combat|Guard", meta = (ClampMin = "0.0"))
+    float ForcedGuardDurationSeconds = 0.35f;
+
+    UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Action Combat|Guard", meta = (ClampMin = "0.0"))
+    float GuardBreakDurationSeconds = 0.9f;
+
+    UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Action Combat|Guard")
+    bool bApplyDamageOnGuardBreakHit = false;
+
     UFUNCTION(BlueprintImplementableEvent, Category = "Action Combat|Melee", DisplayName = "On Recorded Hit")
     void K2_OnRecordedHit(AActor* HitActor, FActionCombatRecordedHit RecordedHit, int32 HitIndex);
+
+    UFUNCTION(BlueprintImplementableEvent, Category = "Action Combat|Guard", DisplayName = "On Hit Blocked")
+    void K2_OnHitBlocked(AActor* HitActor, FActionCombatRecordedHit RecordedHit, int32 HitIndex, EActionCombatLyraGuardOutcome GuardOutcome);
+
+    UFUNCTION(BlueprintImplementableEvent, Category = "Action Combat|Dodge", DisplayName = "On Hit Dodged")
+    void K2_OnHitDodged(AActor* HitActor, FActionCombatRecordedHit RecordedHit, int32 HitIndex);
 
     UFUNCTION(BlueprintImplementableEvent, Category = "Action Combat|Melee", DisplayName = "On Target Effect Applied")
     void K2_OnTargetEffectApplied(AActor* HitActor, FActionCombatRecordedHit RecordedHit, int32 HitIndex);
@@ -77,7 +107,9 @@ private:
     void StopEndAbilityTimer();
     FName ResolveRequestedTraceSourceId() const;
     bool ShouldAcceptHitActor(AActor* HitActor) const;
+    bool ShouldIgnoreRecordedHitFromTargetDodge(AActor* HitActor) const;
     bool ApplyEffectToRecordedHit(AActor* HitActor, UActionCombatMeleeTraceComponent* TraceComponent, const FActionCombatRecordedHit& RecordedHit) const;
+    bool TryResolveGuardedHit(AActor* HitActor, const FActionCombatRecordedHit& RecordedHit, FActionCombatLyraGuardResult& OutGuardResult) const;
 
     UFUNCTION()
     void HandleRecordedHit(UActionCombatMeleeTraceComponent* TraceComponent, FActionCombatRecordedHit RecordedHit, int32 HitIndex);

@@ -1,6 +1,7 @@
 #include "ActionCombatLyraGameplayAbility_MeleeEffect.h"
 
 #include "ActionCombatLyraBridgeTags.h"
+#include "ActionCombatLyraGuardComponent.h"
 #include "AbilityTask_WaitActionCombatMeleeHit.h"
 #include "ActionCombatMeleeTraceComponent.h"
 #include "ActionCombatRuntimeLog.h"
@@ -20,6 +21,7 @@ UActionCombatLyraGameplayAbility_MeleeEffect::UActionCombatLyraGameplayAbility_M
     InstancingPolicy = EGameplayAbilityInstancingPolicy::InstancedPerActor;
     NetExecutionPolicy = EGameplayAbilityNetExecutionPolicy::ServerOnly;
     DamageMultiplierSetByCallerTag = ActionCombatLyraBridgeTags::SetByCaller_DamageMultiplier;
+    TargetDodgeIFrameTag = ActionCombatLyraBridgeTags::Combat_State_Dodge_IFrame;
 }
 
 void UActionCombatLyraGameplayAbility_MeleeEffect::ActivateAbility(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo, const FGameplayAbilityActivationInfo ActivationInfo, const FGameplayEventData* TriggerEventData)
@@ -119,6 +121,17 @@ bool UActionCombatLyraGameplayAbility_MeleeEffect::ShouldAcceptHitActor(AActor* 
     return bAllowMultipleHitsPerActorPerActivation || !HitActorsDuringActivation.Contains(TObjectKey<AActor>(HitActor));
 }
 
+bool UActionCombatLyraGameplayAbility_MeleeEffect::ShouldIgnoreRecordedHitFromTargetDodge(AActor* HitActor) const
+{
+    if (bIgnoreTargetDodgeIFrame || (HitActor == nullptr) || !TargetDodgeIFrameTag.IsValid())
+    {
+        return false;
+    }
+
+    const UAbilitySystemComponent* TargetAbilitySystemComponent = UAbilitySystemGlobals::GetAbilitySystemComponentFromActor(HitActor);
+    return TargetAbilitySystemComponent != nullptr && TargetAbilitySystemComponent->HasMatchingGameplayTag(TargetDodgeIFrameTag);
+}
+
 bool UActionCombatLyraGameplayAbility_MeleeEffect::ApplyEffectToRecordedHit(AActor* HitActor, UActionCombatMeleeTraceComponent* TraceComponent, const FActionCombatRecordedHit& RecordedHit) const
 {
     if ((HitActor == nullptr) || (TargetEffectClass == nullptr))
@@ -211,6 +224,29 @@ bool UActionCombatLyraGameplayAbility_MeleeEffect::ApplyEffectToRecordedHit(AAct
     return true;
 }
 
+bool UActionCombatLyraGameplayAbility_MeleeEffect::TryResolveGuardedHit(AActor* HitActor, const FActionCombatRecordedHit& RecordedHit, FActionCombatLyraGuardResult& OutGuardResult) const
+{
+    if ((HitActor == nullptr) || !bCanBeBlocked)
+    {
+        return false;
+    }
+
+    UActionCombatLyraGuardComponent* GuardComponent = UActionCombatLyraGuardComponent::FindGuardComponent(HitActor);
+    if (!GuardComponent)
+    {
+        return false;
+    }
+
+    FActionCombatLyraIncomingGuardHit IncomingHit;
+    IncomingHit.Attacker = GetAvatarActorFromActorInfo();
+    IncomingHit.HitResult = RecordedHit.HitResult;
+    IncomingHit.bBlockable = bCanBeBlocked;
+    IncomingHit.GuardDamage = GuardDamage;
+    IncomingHit.ForcedGuardDurationSeconds = ForcedGuardDurationSeconds;
+    IncomingHit.GuardBreakDurationSeconds = GuardBreakDurationSeconds;
+    return GuardComponent->TryResolveIncomingHit(IncomingHit, OutGuardResult);
+}
+
 void UActionCombatLyraGameplayAbility_MeleeEffect::HandleRecordedHit(UActionCombatMeleeTraceComponent* TraceComponent, FActionCombatRecordedHit RecordedHit, int32 HitIndex)
 {
     AActor* HitActor = RecordedHit.HitResult.GetActor();
@@ -240,6 +276,50 @@ void UActionCombatLyraGameplayAbility_MeleeEffect::HandleRecordedHit(UActionComb
             *GetPathNameSafe(GetAvatarActorFromActorInfo()),
             *GetNameSafe(HitActor));
         return;
+    }
+
+    if (ShouldIgnoreRecordedHitFromTargetDodge(HitActor))
+    {
+        K2_OnHitDodged(HitActor, RecordedHit, HitIndex);
+
+        UE_LOG(
+            LogActionCombatRuntime,
+            Log,
+            TEXT("[MeleeAbility:%s] DodgeIgnored HitActor=%s DodgeTag=%s"),
+            *GetPathNameSafe(GetAvatarActorFromActorInfo()),
+            *GetNameSafe(HitActor),
+            *TargetDodgeIFrameTag.ToString());
+        return;
+    }
+
+    FActionCombatLyraGuardResult GuardResult;
+    if (TryResolveGuardedHit(HitActor, RecordedHit, GuardResult))
+    {
+        HitActorsDuringActivation.Add(TObjectKey<AActor>(HitActor));
+        K2_OnHitBlocked(HitActor, RecordedHit, HitIndex, GuardResult.Outcome);
+
+        UE_LOG(
+            LogActionCombatRuntime,
+            Log,
+            TEXT("[MeleeAbility:%s] GuardResolved HitActor=%s Outcome=%d GuardDamage=%.2f RemainingResource=%.2f"),
+            *GetPathNameSafe(GetAvatarActorFromActorInfo()),
+            *GetNameSafe(HitActor),
+            static_cast<int32>(GuardResult.Outcome),
+            GuardResult.AppliedGuardDamage,
+            GuardResult.ResourceAfter);
+
+        const bool bShouldSkipHealthDamage = (GuardResult.Outcome == EActionCombatLyraGuardOutcome::Blocked)
+            || ((GuardResult.Outcome == EActionCombatLyraGuardOutcome::GuardBroken) && !bApplyDamageOnGuardBreakHit);
+
+        if (bShouldSkipHealthDamage)
+        {
+            if (bEndAbilityAfterFirstSuccessfulHit)
+            {
+                EndActiveMeleeAbility();
+            }
+
+            return;
+        }
     }
 
     if (ApplyEffectToRecordedHit(HitActor, TraceComponent, RecordedHit))

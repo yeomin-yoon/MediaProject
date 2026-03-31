@@ -72,6 +72,12 @@ struct ACTIONCOMBATRUNTIME_API FActionCombatActionDefinition
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Action")
     FName HitWindowName = NAME_None;
 
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Action", meta = (Categories = "Combat"))
+    FGameplayTagContainer RequiredOwnerTags;
+
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Action", meta = (Categories = "Combat"))
+    FGameplayTagContainer BlockedOwnerTags;
+
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Action")
     TArray<FActionCombatAttributeCost> ResourceCosts;
 

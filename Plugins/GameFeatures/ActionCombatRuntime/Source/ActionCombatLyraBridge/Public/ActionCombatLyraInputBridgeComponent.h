@@ -8,6 +8,7 @@
 
 class APawn;
 class UActionCombatComponent;
+class UActionCombatLyraGuardComponent;
 class UInputAction;
 class UInputComponent;
 class ULyraInputConfig;
@@ -38,18 +39,26 @@ struct ACTIONCOMBATLYRABRIDGE_API FActionCombatLyraInputBinding
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Binding")
     bool bSetFocusInactiveOnCompleted = false;
 
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Binding")
+    bool bSetGuardInputHeldOnStarted = false;
+
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Binding")
+    bool bClearGuardInputHeldOnCompleted = false;
+
     bool WantsStartedBinding() const
     {
         return StartedCommandTag.IsValid()
             || (bMirrorHeldStateWhilePressed && HeldInputStateTag.IsValid())
-            || bSetFocusActiveOnStarted;
+            || bSetFocusActiveOnStarted
+            || bSetGuardInputHeldOnStarted;
     }
 
     bool WantsCompletedBinding() const
     {
         return CompletedCommandTag.IsValid()
             || (bMirrorHeldStateWhilePressed && HeldInputStateTag.IsValid())
-            || bSetFocusInactiveOnCompleted;
+            || bSetFocusInactiveOnCompleted
+            || bClearGuardInputHeldOnCompleted;
     }
 };
 
@@ -73,6 +82,9 @@ protected:
     FComponentReference ActionCombatComponentReference;
 
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Action Combat|Lyra Bridge")
+    FComponentReference GuardComponentReference;
+
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Action Combat|Lyra Bridge")
     bool bBindOnlyLocallyControlled = true;
 
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Action Combat|Lyra Bridge")
@@ -94,6 +106,7 @@ private:
     void LogBinding(const FString& Message) const;
     APawn* ResolvePawnOwner() const;
     UActionCombatComponent* ResolveActionCombatComponent() const;
+    UActionCombatLyraGuardComponent* ResolveGuardComponent() const;
     const ULyraInputConfig* ResolveInputConfig() const;
     const UInputAction* ResolveInputActionForTag(const ULyraInputConfig* InputConfig, const FGameplayTag& InputTag) const;
     const FActionCombatLyraInputBinding* FindBindingByInputTag(const FGameplayTag& InputTag) const;

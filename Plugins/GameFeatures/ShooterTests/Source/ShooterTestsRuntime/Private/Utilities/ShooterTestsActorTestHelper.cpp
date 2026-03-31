@@ -49,6 +49,9 @@ void FShooterTestsActorInputTestHelper::PerformInput(InputActionType Type)
 		case InputActionType::Jump:
 			PawnActions->PerformJump();
 			break;
+		case InputActionType::Dash:
+			PawnActions->PerformDash();
+			break;
 		case InputActionType::MoveForward:
 			PawnActions->MoveForward();
 			break;

@@ -40,6 +40,12 @@ public:
 	inline static const FString RifleMeleeAnimationName = TEXT("AM_MM_Rifle_Melee");
 	inline static const FString ShotgunMeleeAnimationName = TEXT("AM_MM_Shotgun_Melee");
 
+	// Directional dash montages
+	inline static const FString DashForwardAnimationName = TEXT("AM_MM_Dash_Forward");
+	inline static const FString DashBackwardAnimationName = TEXT("AM_MM_Dash_Backward");
+	inline static const FString DashLeftAnimationName = TEXT("AM_MM_Dash_Left");
+	inline static const FString DashRightAnimationName = TEXT("AM_MM_Dash_Right");
+
 	/**
 	 * Find an animation asset within a SkeletalMesh by name.
 	 *
