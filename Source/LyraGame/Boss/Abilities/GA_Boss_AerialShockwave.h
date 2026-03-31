@@ -2,6 +2,8 @@
 
 #include "CoreMinimal.h"
 #include "AbilitySystem/Abilities/LyraGameplayAbility.h"
+#include "NiagaraFunctionLibrary.h"
+#include "NiagaraSystem.h"
 #include "GA_Boss_AerialShockwave.generated.h"
 
 // TODO: BossCharacterBase forward declaration 추가
@@ -16,6 +18,12 @@ class LYRAGAME_API UGA_Boss_AerialShockwave : public ULyraGameplayAbility
 
 public:
 	UGA_Boss_AerialShockwave();
+public:
+	UPROPERTY(EditDefaultsOnly,Category="FX")
+	TObjectPtr<UNiagaraSystem> JumpStartFX;
+	UPROPERTY(EditDefaultsOnly,Category="FX")
+	TObjectPtr<UNiagaraSystem> JumpEndFX;
+	
 
 protected:
 	virtual void ActivateAbility(const FGameplayAbilitySpecHandle Handle,
@@ -37,6 +45,7 @@ private:
 	UFUNCTION()
 	void OnBossLanded();
 
+	
 	// 위로 솟구치는 힘의 크기
 	// 이유: BP에서 값을 조정할 수 있어야 보스마다 다른 점프 높이를 줄 수 있음.
 	UPROPERTY(EditDefaultsOnly, Category = "Boss|AerialAttack")
@@ -52,9 +61,10 @@ private:
 	
 	
 	
-	// TODO: 착지 충격에 적용할 GameplayEffect 클래스 참조 추가
-	// 이유: GE는 에셋이라 C++에서 직접 생성하지 않고 BP에서 지정해야
-	//       디자이너가 데미지 수치를 수정할 수 있음.
-	// UPROPERTY(EditDefaultsOnly, Category = "Boss|AerialAttack")
-	// TSubclassOf<UGameplayEffect> DamageEffect;
+	// TODO: 착지 충격에 적용할 GE 변수 선언
+	//       힌트: NormalAttack의 DamageEffectClass와 동일한 패턴
+	//             TSubclassOf<UGameplayEffect>, UPROPERTY(EditDefaultsOnly)
+	//             이름: DamageEffectClass
+	UPROPERTY(EditDefaultsOnly)
+	TSubclassOf<UGameplayEffect> DamageEffectClass;
 };
