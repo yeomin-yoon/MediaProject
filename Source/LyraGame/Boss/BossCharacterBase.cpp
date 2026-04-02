@@ -73,36 +73,29 @@ void ABossCharacterBase::Tick(float DeltaSeconds)
 	APlayerController* PC = GetWorld()->GetFirstPlayerController();
 	if (!PC)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("[BossTest] Tick: PlayerController 없음"));
 		return;
 	}
 
 	if (PC->WasInputKeyJustPressed(EKeys::One))
 	{
-		UE_LOG(LogTemp, Warning, TEXT("[BossTest] 1번 키 감지됨 → Test() 호출"));
 		Test();
 	}
 }
 
 void ABossCharacterBase::Test()
 {
-	UE_LOG(LogTemp, Warning, TEXT("[BossTest] Test() 진입"));
-
 	UAbilitySystemComponent* ASC = GetAbilitySystemComponent();
 	if (!ASC)
 	{
-		UE_LOG(LogTemp, Error, TEXT("[BossTest] ASC 없음"));
 		return;
 	}
 
 	if (!TestAbilityClass)
 	{
-		UE_LOG(LogTemp, Error, TEXT("[BossTest] TestAbilityClass 미설정 — BP_TestBoss Details에서 지정할 것"));
 		return;
 	}
 
-	bool bActivated = ASC->TryActivateAbilityByClass(TestAbilityClass);
-	UE_LOG(LogTemp, Warning, TEXT("[BossTest] TryActivateAbilityByClass 결과: %s"), bActivated ? TEXT("성공") : TEXT("실패"));
+	ASC->TryActivateAbilityByClass(TestAbilityClass);
 }
 
 void ABossCharacterBase::SetIsGrounded(bool IsGrounded)

@@ -13,3 +13,6 @@ Saved
 *.xcodeproj
 *.xcworkspace
 claude.md
+.claude/.commands/Learn.md.txt
+.claude/.commands/review.md.txt
+.claude/.commands/Debug.md.txt

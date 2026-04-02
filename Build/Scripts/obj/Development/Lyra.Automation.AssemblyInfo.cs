@@ -14,7 +14,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("Lyra.Automation")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Development")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+945b8a0a4f46563e3e7d1c6bc34e64d5a57ee11d")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+91214c4dcdd986a0961c1fd0f61b7cd393ca31af")]
 [assembly: System.Reflection.AssemblyProductAttribute("Lyra.Automation")]
 [assembly: System.Reflection.AssemblyTitleAttribute("Lyra.Automation")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

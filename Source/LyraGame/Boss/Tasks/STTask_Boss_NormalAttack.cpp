@@ -18,7 +18,6 @@ EStateTreeRunStatus FSTTask_Boss_NormalAttack::EnterState(FStateTreeExecutionCon
 	const FStateTreeTransitionResult& Transition) const
 {
 	FInstanceDataType& Data = Context.GetInstanceData(*this);
-	UE_LOG(LogTemp,Warning,TEXT("공격"));
 	
 	Data.AbilityEndCallbackHandle.Reset();
 	Data.bIsEnd = false;
@@ -49,7 +48,6 @@ EStateTreeRunStatus FSTTask_Boss_NormalAttack::EnterState(FStateTreeExecutionCon
 	FGameplayTagContainer ActivationTags;
 	ActivationTags.AddTag(FGameplayTag::RequestGameplayTag(FName("Boss.Attack.BaseAttack")));
 	const bool isSucced = AbilitySystemComponent->TryActivateAbilitiesByTag(ActivationTags);
-	UE_LOG(LogTemp, Warning, TEXT("NormalAttack Activate: %s"), isSucced ? TEXT("SUCCESS") : TEXT("FAILED"));
 	if (!isSucced)
 	{
 		return EStateTreeRunStatus::Failed;

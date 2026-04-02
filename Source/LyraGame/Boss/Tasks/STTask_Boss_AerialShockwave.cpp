@@ -25,14 +25,12 @@ EStateTreeRunStatus FSTTask_Boss_AerialShockwave::EnterState(FStateTreeExecution
 	ABossCharacterBaseAiController* BossController = Cast<ABossCharacterBaseAiController>(RawController);
 	if (!BossController)
 	{
-		UE_LOG(LogTemp, Error, TEXT("[AerialShockwave] BossController 없음"));
 		return EStateTreeRunStatus::Failed;
 	}
 
 	AActor* BossPawn = BossController->GetPawn();
 	if (!BossPawn)
 	{
-		UE_LOG(LogTemp, Error, TEXT("[AerialShockwave] BossPawn 없음"));
 		return EStateTreeRunStatus::Failed;
 	}
 
@@ -41,14 +39,12 @@ EStateTreeRunStatus FSTTask_Boss_AerialShockwave::EnterState(FStateTreeExecution
 	UAbilitySystemComponent* ASC = UAbilitySystemBlueprintLibrary::GetAbilitySystemComponent(BossPawn);
 	if (!ASC)
 	{
-		UE_LOG(LogTemp, Error, TEXT("[AerialShockwave] ASC 없음"));
 		return EStateTreeRunStatus::Failed;
 	}
 
-FGameplayTagContainer ActivationTags;
+	FGameplayTagContainer ActivationTags;
 	ActivationTags.AddTag(FGameplayTag::RequestGameplayTag(FName("Boss.Attack.AerialAttack")));
 	const bool bSucceeded = ASC->TryActivateAbilitiesByTag(ActivationTags);
-	UE_LOG(LogTemp, Warning, TEXT("[AerialShockwave] Activate: %s"), bSucceeded ? TEXT("SUCCESS") : TEXT("FAILED"));
 	if (!bSucceeded)
 	{
 		return EStateTreeRunStatus::Running; // Failed 대신 Running으로 스팸 방지
