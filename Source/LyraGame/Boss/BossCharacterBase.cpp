@@ -41,16 +41,11 @@ void ABossCharacterBase::Landed(const FHitResult& Hit)
 {
 	Super::Landed(Hit);
 
-	// TODO: bIsGrounded = true, bIsJumping = false 세팅
-	// 이유: 착지했으므로 애님 그래프 변수를 즉시 갱신해야
-	//       착지 애니메이션 스테이트로 전환됨.
+	
 	bIsGrounded = true;
 	bIsJumping = false;
 
-	// TODO: 델리게이트 브로드캐스트
-	// 이유: 바인딩된 모든 함수(GA의 OnBossLanded 등)를 한 번에 호출.
-	//       누가 바인딩했는지 여기서 알 필요 없음 — 느슨한 결합.
-	//       IsBound() 체크는 선택사항이지만 바인딩이 없을 때 불필요한 호출을 막을 수 있음.
+	
 	OnLandedDelegate.Broadcast();
 }
 
