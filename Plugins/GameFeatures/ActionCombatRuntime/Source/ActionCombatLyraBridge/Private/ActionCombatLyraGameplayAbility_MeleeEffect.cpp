@@ -1,7 +1,12 @@
 #include "ActionCombatLyraGameplayAbility_MeleeEffect.h"
 
+#include "ActionCombatGameplayEffect_WeaponDamage.h"
 #include "ActionCombatLyraBridgeTags.h"
+#include "ActionCombatLyraEquipmentResolver.h"
 #include "ActionCombatLyraGuardComponent.h"
+#include "ActionCombatStatsSet.h"
+#include "ActionCombatWeaponDefinition.h"
+#include "ActionCombatWeaponResolverData.h"
 #include "AbilityTask_WaitActionCombatMeleeHit.h"
 #include "ActionCombatMeleeTraceComponent.h"
 #include "ActionCombatRuntimeLog.h"
@@ -20,6 +25,7 @@ UActionCombatLyraGameplayAbility_MeleeEffect::UActionCombatLyraGameplayAbility_M
 {
     InstancingPolicy = EGameplayAbilityInstancingPolicy::InstancedPerActor;
     NetExecutionPolicy = EGameplayAbilityNetExecutionPolicy::ServerOnly;
+    SnapshotDamageEffectClass = UActionCombatGameplayEffect_WeaponDamage::StaticClass();
     DamageMultiplierSetByCallerTag = ActionCombatLyraBridgeTags::SetByCaller_DamageMultiplier;
     TargetDodgeIFrameTag = ActionCombatLyraBridgeTags::Combat_State_Dodge_IFrame;
 }
@@ -35,6 +41,7 @@ void UActionCombatLyraGameplayAbility_MeleeEffect::ActivateAbility(const FGamepl
     }
 
     HitActorsDuringActivation.Reset();
+    BuildActivationAttackSnapshot();
 
     UE_LOG(
         LogActionCombatRuntime,
@@ -43,7 +50,7 @@ void UActionCombatLyraGameplayAbility_MeleeEffect::ActivateAbility(const FGamepl
         *GetPathNameSafe(GetAvatarActorFromActorInfo()),
         *GetNameSafe(GetClass()),
         *ResolveRequestedTraceSourceId().ToString(),
-        *GetNameSafe(TargetEffectClass));
+        *GetNameSafe(ResolveDamageEffectClass()));
 
     WaitForMeleeHitTask = UAbilityTask_WaitActionCombatMeleeHit::WaitActionCombatMeleeHit(this, ResolveRequestedTraceSourceId(), bIncludeAttachedActors, false, false);
     if (WaitForMeleeHitTask)
@@ -71,6 +78,7 @@ void UActionCombatLyraGameplayAbility_MeleeEffect::EndAbility(const FGameplayAbi
     HitActorsDuringActivation.Reset();
     WaitForMeleeHitTask = nullptr;
     WaitForActionEndedEventTask = nullptr;
+    ResetActivationAttackSnapshot();
 
     Super::EndAbility(Handle, ActorInfo, ActivationInfo, bReplicateEndAbility, bWasCancelled);
 }
@@ -134,7 +142,8 @@ bool UActionCombatLyraGameplayAbility_MeleeEffect::ShouldIgnoreRecordedHitFromTa
 
 bool UActionCombatLyraGameplayAbility_MeleeEffect::ApplyEffectToRecordedHit(AActor* HitActor, UActionCombatMeleeTraceComponent* TraceComponent, const FActionCombatRecordedHit& RecordedHit) const
 {
-    if ((HitActor == nullptr) || (TargetEffectClass == nullptr))
+    const TSubclassOf<UGameplayEffect> ResolvedEffectClass = ResolveDamageEffectClass();
+    if ((HitActor == nullptr) || (ResolvedEffectClass == nullptr))
     {
         UE_LOG(
             LogActionCombatRuntime,
@@ -142,7 +151,7 @@ bool UActionCombatLyraGameplayAbility_MeleeEffect::ApplyEffectToRecordedHit(AAct
             TEXT("[MeleeAbility:%s] ApplyEffect skipped HitActor=%s TargetEffect=%s"),
             *GetPathNameSafe(GetAvatarActorFromActorInfo()),
             *GetNameSafe(HitActor),
-            *GetNameSafe(TargetEffectClass));
+            *GetNameSafe(ResolvedEffectClass));
         return false;
     }
 
@@ -158,7 +167,7 @@ bool UActionCombatLyraGameplayAbility_MeleeEffect::ApplyEffectToRecordedHit(AAct
         return false;
     }
 
-    FGameplayEffectSpecHandle EffectSpecHandle = MakeOutgoingGameplayEffectSpec(TargetEffectClass, GetAbilityLevel());
+    FGameplayEffectSpecHandle EffectSpecHandle = MakeOutgoingGameplayEffectSpec(ResolvedEffectClass, GetAbilityLevel());
     FGameplayEffectSpec* EffectSpec = EffectSpecHandle.Data.Get();
     if (EffectSpec == nullptr)
     {
@@ -167,7 +176,7 @@ bool UActionCombatLyraGameplayAbility_MeleeEffect::ApplyEffectToRecordedHit(AAct
             Warning,
             TEXT("[MeleeAbility:%s] ApplyEffect skipped because effect spec could not be created for %s"),
             *GetPathNameSafe(GetAvatarActorFromActorInfo()),
-            *GetNameSafe(TargetEffectClass));
+            *GetNameSafe(ResolvedEffectClass));
         return false;
     }
 
@@ -181,7 +190,11 @@ bool UActionCombatLyraGameplayAbility_MeleeEffect::ApplyEffectToRecordedHit(AAct
         EffectSpec->AddDynamicAssetTag(RecordedHit.HitZoneTag);
     }
 
-    if (bWriteFinalDamageToLyraSetByCallerDamage)
+    if (bUseAttackSnapshotDamageExecution)
+    {
+        ConfigureSnapshotDamageSpec(*EffectSpec, RecordedHit);
+    }
+    else if (bWriteFinalDamageToLyraSetByCallerDamage)
     {
         bool bFoundBaseDamage = false;
         float BaseDamage = FallbackBaseDamage;
@@ -207,7 +220,7 @@ bool UActionCombatLyraGameplayAbility_MeleeEffect::ApplyEffectToRecordedHit(AAct
             BaseDamage * RecordedHit.DamageMultiplier);
     }
 
-    if (DamageMultiplierSetByCallerTag.IsValid())
+    if (!bUseAttackSnapshotDamageExecution && DamageMultiplierSetByCallerTag.IsValid())
     {
         EffectSpec->SetSetByCallerMagnitude(DamageMultiplierSetByCallerTag, RecordedHit.DamageMultiplier);
     }
@@ -220,8 +233,157 @@ bool UActionCombatLyraGameplayAbility_MeleeEffect::ApplyEffectToRecordedHit(AAct
         TEXT("[MeleeAbility:%s] AppliedEffect HitActor=%s Effect=%s"),
         *GetPathNameSafe(GetAvatarActorFromActorInfo()),
         *GetNameSafe(HitActor),
-        *GetNameSafe(TargetEffectClass));
+        *GetNameSafe(ResolvedEffectClass));
     return true;
+}
+
+void UActionCombatLyraGameplayAbility_MeleeEffect::BuildActivationAttackSnapshot()
+{
+    ActivationAttackSnapshot = MakeAttackSnapshot();
+    bHasActivationAttackSnapshot = true;
+
+    UE_LOG(
+        LogActionCombatRuntime,
+        Log,
+        TEXT("[MeleeAbility:%s] AttackSnapshot Action=%s BaseDamage=%.2f MotionValue=%.2f StatScaling=%.2f WeaponDefinition=%s"),
+        *GetPathNameSafe(GetAvatarActorFromActorInfo()),
+        *ActivationAttackSnapshot.ActionTag.ToString(),
+        ActivationAttackSnapshot.ResolvedBaseDamage,
+        ActivationAttackSnapshot.MotionValue,
+        ActivationAttackSnapshot.ComputeStatScalingContribution(),
+        ActivationAttackSnapshot.bUsesWeaponDefinition ? TEXT("true") : TEXT("false"));
+}
+
+void UActionCombatLyraGameplayAbility_MeleeEffect::ResetActivationAttackSnapshot()
+{
+    ActivationAttackSnapshot.Reset();
+    bHasActivationAttackSnapshot = false;
+}
+
+FActionCombatAttackSnapshot UActionCombatLyraGameplayAbility_MeleeEffect::MakeAttackSnapshot() const
+{
+    FActionCombatAttackSnapshot Snapshot;
+    const FActionCombatActiveActionState ActionState = GetCurrentActionCombatState();
+    Snapshot.ActionTag = ActionState.ActionTag;
+    Snapshot.MotionValue = FMath::Max(ActionState.MotionValue, 0.0f);
+    Snapshot.PoiseDamage = FMath::Max(ActionState.PoiseDamage, 0.0f);
+    Snapshot.BuildupMultiplier = FMath::Max(ActionState.BuildupMultiplier, 0.0f);
+
+    bool bFoundBaseDamage = false;
+    Snapshot.ResolvedBaseDamage = FallbackBaseDamage;
+    if (BaseDamageAttribute.IsValid())
+    {
+        const float AttributeBaseDamage = GetAvatarAttributeValue(BaseDamageAttribute, bFoundBaseDamage);
+        if (bFoundBaseDamage)
+        {
+            Snapshot.ResolvedBaseDamage = AttributeBaseDamage;
+        }
+    }
+
+    bool bFoundStrength = false;
+    Snapshot.StrengthValue = GetAvatarAttributeValue(UActionCombatStatsSet::GetStrengthAttribute(), bFoundStrength);
+    if (!bFoundStrength)
+    {
+        Snapshot.StrengthValue = 0.0f;
+    }
+
+    bool bFoundDexterity = false;
+    Snapshot.DexterityValue = GetAvatarAttributeValue(UActionCombatStatsSet::GetDexterityAttribute(), bFoundDexterity);
+    if (!bFoundDexterity)
+    {
+        Snapshot.DexterityValue = 0.0f;
+    }
+
+    bool bFoundIntelligence = false;
+    Snapshot.IntelligenceValue = GetAvatarAttributeValue(UActionCombatStatsSet::GetIntelligenceAttribute(), bFoundIntelligence);
+    if (!bFoundIntelligence)
+    {
+        Snapshot.IntelligenceValue = 0.0f;
+    }
+
+    bool bFoundFaith = false;
+    Snapshot.FaithValue = GetAvatarAttributeValue(UActionCombatStatsSet::GetFaithAttribute(), bFoundFaith);
+    if (!bFoundFaith)
+    {
+        Snapshot.FaithValue = 0.0f;
+    }
+
+    bool bFoundArcane = false;
+    Snapshot.ArcaneValue = GetAvatarAttributeValue(UActionCombatStatsSet::GetArcaneAttribute(), bFoundArcane);
+    if (!bFoundArcane)
+    {
+        Snapshot.ArcaneValue = 0.0f;
+    }
+
+    if (const AActor* AvatarActor = GetAvatarActorFromActorInfo())
+    {
+        if (const UActionCombatWeaponDefinition* WeaponDefinition = UActionCombatLyraEquipmentResolver::ResolveEquippedWeaponDefinition(AvatarActor, WeaponResolverData))
+        {
+            const int32 WeaponLevel = UActionCombatLyraEquipmentResolver::ResolveEquippedWeaponLevel(AvatarActor, WeaponResolverData);
+            Snapshot.bUsesWeaponDefinition = true;
+            Snapshot.ResolvedBaseDamage = WeaponDefinition->GetResolvedBaseDamage(WeaponLevel);
+            Snapshot.StrengthScaling = WeaponDefinition->GetStrengthScaling();
+            Snapshot.DexterityScaling = WeaponDefinition->GetDexterityScaling();
+            Snapshot.IntelligenceScaling = WeaponDefinition->GetIntelligenceScaling();
+            Snapshot.FaithScaling = WeaponDefinition->GetFaithScaling();
+            Snapshot.ArcaneScaling = WeaponDefinition->GetArcaneScaling();
+        }
+    }
+
+    return Snapshot;
+}
+
+TSubclassOf<UGameplayEffect> UActionCombatLyraGameplayAbility_MeleeEffect::ResolveDamageEffectClass() const
+{
+    if (bUseAttackSnapshotDamageExecution && SnapshotDamageEffectClass)
+    {
+        return SnapshotDamageEffectClass;
+    }
+
+    return TargetEffectClass;
+}
+
+void UActionCombatLyraGameplayAbility_MeleeEffect::ConfigureSnapshotDamageSpec(FGameplayEffectSpec& EffectSpec, const FActionCombatRecordedHit& RecordedHit) const
+{
+    const FActionCombatAttackSnapshot Snapshot = bHasActivationAttackSnapshot ? ActivationAttackSnapshot : MakeAttackSnapshot();
+
+    EffectSpec.SetSetByCallerMagnitude(ActionCombatLyraBridgeTags::SetByCaller_Attack_BaseDamage, Snapshot.ResolvedBaseDamage);
+    EffectSpec.SetSetByCallerMagnitude(ActionCombatLyraBridgeTags::SetByCaller_Attack_MotionValue, Snapshot.MotionValue);
+    EffectSpec.SetSetByCallerMagnitude(ActionCombatLyraBridgeTags::SetByCaller_Attack_Strength, Snapshot.StrengthValue);
+    EffectSpec.SetSetByCallerMagnitude(ActionCombatLyraBridgeTags::SetByCaller_Attack_Dexterity, Snapshot.DexterityValue);
+    EffectSpec.SetSetByCallerMagnitude(ActionCombatLyraBridgeTags::SetByCaller_Attack_Intelligence, Snapshot.IntelligenceValue);
+    EffectSpec.SetSetByCallerMagnitude(ActionCombatLyraBridgeTags::SetByCaller_Attack_Faith, Snapshot.FaithValue);
+    EffectSpec.SetSetByCallerMagnitude(ActionCombatLyraBridgeTags::SetByCaller_Attack_Arcane, Snapshot.ArcaneValue);
+    EffectSpec.SetSetByCallerMagnitude(ActionCombatLyraBridgeTags::SetByCaller_Attack_StrengthScaling, Snapshot.StrengthScaling);
+    EffectSpec.SetSetByCallerMagnitude(ActionCombatLyraBridgeTags::SetByCaller_Attack_DexterityScaling, Snapshot.DexterityScaling);
+    EffectSpec.SetSetByCallerMagnitude(ActionCombatLyraBridgeTags::SetByCaller_Attack_IntelligenceScaling, Snapshot.IntelligenceScaling);
+    EffectSpec.SetSetByCallerMagnitude(ActionCombatLyraBridgeTags::SetByCaller_Attack_FaithScaling, Snapshot.FaithScaling);
+    EffectSpec.SetSetByCallerMagnitude(ActionCombatLyraBridgeTags::SetByCaller_Attack_ArcaneScaling, Snapshot.ArcaneScaling);
+    EffectSpec.SetSetByCallerMagnitude(ActionCombatLyraBridgeTags::SetByCaller_Attack_PoiseDamage, Snapshot.PoiseDamage);
+    EffectSpec.SetSetByCallerMagnitude(ActionCombatLyraBridgeTags::SetByCaller_Attack_BuildupMultiplier, Snapshot.BuildupMultiplier);
+
+    if (DamageMultiplierSetByCallerTag.IsValid())
+    {
+        EffectSpec.SetSetByCallerMagnitude(DamageMultiplierSetByCallerTag, RecordedHit.DamageMultiplier);
+    }
+
+    if (bWriteFinalDamageToLyraSetByCallerDamage)
+    {
+        const float PreviewDamage = Snapshot.ComputePreviewDamage(RecordedHit.DamageMultiplier);
+        EffectSpec.SetSetByCallerMagnitude(LyraGameplayTags::SetByCaller_Damage, PreviewDamage);
+
+        UE_LOG(
+            LogActionCombatRuntime,
+            Log,
+            TEXT("[MeleeAbility:%s] PreparedSnapshotDamage HitActor=%s BaseDamage=%.2f StatScaling=%.2f MotionValue=%.2f Multiplier=%.2f FinalDamage=%.2f"),
+            *GetPathNameSafe(GetAvatarActorFromActorInfo()),
+            *GetNameSafe(RecordedHit.HitResult.GetActor()),
+            Snapshot.ResolvedBaseDamage,
+            Snapshot.ComputeStatScalingContribution(),
+            Snapshot.MotionValue,
+            RecordedHit.DamageMultiplier,
+            PreviewDamage);
+    }
 }
 
 bool UActionCombatLyraGameplayAbility_MeleeEffect::TryResolveGuardedHit(AActor* HitActor, const FActionCombatRecordedHit& RecordedHit, FActionCombatLyraGuardResult& OutGuardResult) const

@@ -342,11 +342,17 @@ void UActionCombatComponent::OnRep_ReplicatedState()
         {
             ActiveActionState.TraceSourceId = ReplicatedActionDefinition->TraceSourceId;
             ActiveActionState.HitWindowName = ReplicatedActionDefinition->HitWindowName;
+            ActiveActionState.MotionValue = ReplicatedActionDefinition->MotionValue;
+            ActiveActionState.PoiseDamage = ReplicatedActionDefinition->PoiseDamage;
+            ActiveActionState.BuildupMultiplier = ReplicatedActionDefinition->BuildupMultiplier;
         }
         else
         {
             ActiveActionState.TraceSourceId = NAME_None;
             ActiveActionState.HitWindowName = NAME_None;
+            ActiveActionState.MotionValue = 1.0f;
+            ActiveActionState.PoiseDamage = 0.0f;
+            ActiveActionState.BuildupMultiplier = 1.0f;
         }
     }
 
@@ -488,6 +494,9 @@ bool UActionCombatComponent::StartActionFromDefinition(const FActionCombatAction
     ActiveActionState.bStartedWhileFocusActive = bFocusActive;
     ActiveActionState.TraceSourceId = ActionDefinition->TraceSourceId;
     ActiveActionState.HitWindowName = ActionDefinition->HitWindowName;
+    ActiveActionState.MotionValue = ActionDefinition->MotionValue;
+    ActiveActionState.PoiseDamage = ActionDefinition->PoiseDamage;
+    ActiveActionState.BuildupMultiplier = ActionDefinition->BuildupMultiplier;
 
     if (bAutoPlayMontages && ActionDefinition->Montage)
     {

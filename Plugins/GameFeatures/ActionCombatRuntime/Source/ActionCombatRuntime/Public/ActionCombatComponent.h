@@ -62,6 +62,15 @@ struct ACTIONCOMBATRUNTIME_API FActionCombatActiveActionState
     UPROPERTY(BlueprintReadOnly, Category = "Action")
     FName HitWindowName = NAME_None;
 
+    UPROPERTY(BlueprintReadOnly, Category = "Damage")
+    float MotionValue = 1.0f;
+
+    UPROPERTY(BlueprintReadOnly, Category = "Damage")
+    float PoiseDamage = 0.0f;
+
+    UPROPERTY(BlueprintReadOnly, Category = "Damage")
+    float BuildupMultiplier = 1.0f;
+
     void Reset()
     {
         ActionTag = FGameplayTag();
@@ -72,6 +81,9 @@ struct ACTIONCOMBATRUNTIME_API FActionCombatActiveActionState
         bUsingMontageTiming = false;
         TraceSourceId = NAME_None;
         HitWindowName = NAME_None;
+        MotionValue = 1.0f;
+        PoiseDamage = 0.0f;
+        BuildupMultiplier = 1.0f;
     }
 };
 

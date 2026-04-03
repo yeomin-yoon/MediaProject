@@ -1,5 +1,6 @@
 #pragma once
 
+#include "ActionCombatAttackSnapshot.h"
 #include "ActionCombatLyraGameplayAbility_Action.h"
 #include "ActionCombatMeleeTraceTypes.h"
 #include "GameplayTagContainer.h"
@@ -11,7 +12,9 @@ class UAbilityTask_WaitGameplayEvent;
 class UGameplayEffect;
 class UActionCombatLyraGuardComponent;
 class UActionCombatMeleeTraceComponent;
+class UActionCombatWeaponResolverData;
 struct FTimerHandle;
+struct FGameplayEffectSpec;
 enum class EActionCombatLyraGuardOutcome : uint8;
 struct FActionCombatLyraGuardResult;
 
@@ -29,7 +32,22 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Action Combat|Ability")
     void EndActiveMeleeAbility();
 
+    UFUNCTION(BlueprintPure, Category = "Action Combat|Damage")
+    FActionCombatAttackSnapshot GetCurrentActivationAttackSnapshot() const
+    {
+        return ActivationAttackSnapshot;
+    }
+
 protected:
+    UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Action Combat|Damage")
+    bool bUseAttackSnapshotDamageExecution = true;
+
+    UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Action Combat|Damage")
+    TSubclassOf<UGameplayEffect> SnapshotDamageEffectClass;
+
+    UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Action Combat|Damage")
+    TObjectPtr<UActionCombatWeaponResolverData> WeaponResolverData = nullptr;
+
     UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Action Combat|Melee")
     TSubclassOf<UGameplayEffect> TargetEffectClass;
 
@@ -103,6 +121,11 @@ protected:
     void K2_OnTargetEffectApplied(AActor* HitActor, FActionCombatRecordedHit RecordedHit, int32 HitIndex);
 
 private:
+    void BuildActivationAttackSnapshot();
+    void ResetActivationAttackSnapshot();
+    FActionCombatAttackSnapshot MakeAttackSnapshot() const;
+    TSubclassOf<UGameplayEffect> ResolveDamageEffectClass() const;
+    void ConfigureSnapshotDamageSpec(FGameplayEffectSpec& EffectSpec, const FActionCombatRecordedHit& RecordedHit) const;
     void StartEndAbilityTimer();
     void StopEndAbilityTimer();
     FName ResolveRequestedTraceSourceId() const;
@@ -126,6 +149,10 @@ private:
     UPROPERTY(Transient)
     TObjectPtr<UAbilityTask_WaitGameplayEvent> WaitForActionEndedEventTask;
 
+    UPROPERTY(Transient)
+    FActionCombatAttackSnapshot ActivationAttackSnapshot;
+
     TSet<TObjectKey<AActor>> HitActorsDuringActivation;
     FTimerHandle EndAbilityTimerHandle;
+    bool bHasActivationAttackSnapshot = false;
 };

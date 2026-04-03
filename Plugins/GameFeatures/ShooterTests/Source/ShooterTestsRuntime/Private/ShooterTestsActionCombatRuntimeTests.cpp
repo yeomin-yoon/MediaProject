@@ -173,14 +173,9 @@ ACTOR_ANIMATION_TEST_WITH_FLAGS(ActionCombatDragonRuntimeDashTest, "Project.Func
 
 	void RegisterKnownDashCueErrors(bool bExpectDeactivateError = false)
 	{
-		// ShooterCore's legacy dash cue currently emits PIE blueprint errors for meshes without matching Niagara setup.
-		// Keep the gameplay test signal clean while documenting the cue issue separately.
-		TestRunner->AddExpectedErrorPlain(TEXT("PIE: Blueprint Runtime Error: \"Accessed None trying to read property CallFunc_SpawnSystemAttached_ReturnValue\""), EAutomationExpectedErrorFlags::Contains, 0);
-		TestRunner->AddExpectedErrorPlain(TEXT("PIE: Blueprint Runtime Error: \"Accessed None trying to read property CallFunc_Array_Get_Item\""), EAutomationExpectedErrorFlags::Contains, 0);
-		if (bExpectDeactivateError)
-		{
-			TestRunner->AddExpectedErrorPlain(TEXT("PIE: Blueprint Runtime Error: \"Accessed None trying to read property CallFunc_Array_Get_Item_1\""), EAutomationExpectedErrorFlags::Contains, 0);
-		}
+		// The older Dragon runtime lane sometimes produced dash cue blueprint errors for Niagara setup mismatches.
+		// The current lane no longer reproduces them consistently, so the automation should stay focused on gameplay
+		// and not fail when the cosmetic warning noise does not appear.
 	}
 
 	void TestDirectionalDashAnimation(const TCHAR* AnimationPath, TFunction<void()> MoveAction)
