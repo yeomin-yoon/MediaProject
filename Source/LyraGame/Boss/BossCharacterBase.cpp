@@ -3,7 +3,6 @@
 #include "AbilitySystem/LyraAbilitySet.h"
 #include "AbilitySystem/LyraAbilitySystemComponent.h"
 #include "AbilitySystemComponent.h"
-#include "GameFramework/CharacterMovementComponent.h"
 #include "GameFramework/PlayerController.h"
 
 ABossCharacterBase::ABossCharacterBase(const FObjectInitializer& ObjectInitializer)
@@ -37,35 +36,6 @@ void ABossCharacterBase::BeginPlay()
 	BossAbilitySet->GiveToAbilitySystem(BossASC, nullptr);
 }
 
-void ABossCharacterBase::Landed(const FHitResult& Hit)
-{
-	Super::Landed(Hit);
-
-	// TODO: bIsGrounded = true, bIsJumping = false 세팅
-	// 이유: 착지했으므로 애님 그래프 변수를 즉시 갱신해야
-	//       착지 애니메이션 스테이트로 전환됨.
-	bIsGrounded = true;
-	bIsJumping = false;
-
-	// TODO: 델리게이트 브로드캐스트
-	// 이유: 바인딩된 모든 함수(GA의 OnBossLanded 등)를 한 번에 호출.
-	//       누가 바인딩했는지 여기서 알 필요 없음 — 느슨한 결합.
-	//       IsBound() 체크는 선택사항이지만 바인딩이 없을 때 불필요한 호출을 막을 수 있음.
-	OnLandedDelegate.Broadcast();
-}
-
-bool ABossCharacterBase::GetIsGrounded()
-{
-	bIsGrounded = !GetCharacterMovement()->IsFalling();
-	return bIsGrounded;
-}
-
-bool ABossCharacterBase::GetIsJumping()
-{
-	bIsJumping = GetCharacterMovement()->IsFalling();
-	return bIsJumping;
-}
-
 void ABossCharacterBase::Tick(float DeltaSeconds)
 {
 	Super::Tick(DeltaSeconds);
@@ -73,46 +43,29 @@ void ABossCharacterBase::Tick(float DeltaSeconds)
 	APlayerController* PC = GetWorld()->GetFirstPlayerController();
 	if (!PC)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("[BossTest] Tick: PlayerController 없음"));
 		return;
 	}
 
 	if (PC->WasInputKeyJustPressed(EKeys::One))
 	{
-		UE_LOG(LogTemp, Warning, TEXT("[BossTest] 1번 키 감지됨 → Test() 호출"));
 		Test();
 	}
 }
 
 void ABossCharacterBase::Test()
 {
-	UE_LOG(LogTemp, Warning, TEXT("[BossTest] Test() 진입"));
-
 	UAbilitySystemComponent* ASC = GetAbilitySystemComponent();
 	if (!ASC)
 	{
-		UE_LOG(LogTemp, Error, TEXT("[BossTest] ASC 없음"));
 		return;
 	}
 
 	if (!TestAbilityClass)
 	{
-		UE_LOG(LogTemp, Error, TEXT("[BossTest] TestAbilityClass 미설정 — BP_TestBoss Details에서 지정할 것"));
 		return;
 	}
 
-	bool bActivated = ASC->TryActivateAbilityByClass(TestAbilityClass);
-	UE_LOG(LogTemp, Warning, TEXT("[BossTest] TryActivateAbilityByClass 결과: %s"), bActivated ? TEXT("성공") : TEXT("실패"));
-}
-
-void ABossCharacterBase::SetIsGrounded(bool IsGrounded)
-{
-	bIsGrounded = IsGrounded;
-}
-
-void ABossCharacterBase::SetIsJumping(bool IsJumping)
-{
-	bIsJumping= IsJumping;
+	ASC->TryActivateAbilityByClass(TestAbilityClass);
 }
 
 
