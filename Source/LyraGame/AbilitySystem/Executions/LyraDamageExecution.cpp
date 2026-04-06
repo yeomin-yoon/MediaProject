@@ -130,6 +130,19 @@ void ULyraDamageExecution::Execute_Implementation(const FGameplayEffectCustomExe
 	// Clamping is done when damage is converted to -health
 	const float DamageDone = FMath::Max(BaseDamage * DistanceAttenuation * PhysicalMaterialAttenuation * DamageInteractionAllowedMultiplier, 0.0f);
 
+	UE_LOG(
+		LogLyraAbilitySystem,
+		Log,
+		TEXT("LyraDamageExecution: Effect=%s Causer=%s Target=%s BaseDamage=%.2f DistanceAttenuation=%.2f PhysicalMaterialAttenuation=%.2f TeamMultiplier=%.2f FinalDamage=%.2f"),
+		*GetPathNameSafe(Spec.Def),
+		*GetPathNameSafe(EffectCauser),
+		*GetPathNameSafe(HitActor),
+		BaseDamage,
+		DistanceAttenuation,
+		PhysicalMaterialAttenuation,
+		DamageInteractionAllowedMultiplier,
+		DamageDone);
+
 	if (DamageDone > 0.0f)
 	{
 		// Apply a damage modifier, this gets turned into - health on the target

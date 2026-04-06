@@ -137,6 +137,16 @@ float ULyraHealthComponent::GetHealthNormalized() const
 
 void ULyraHealthComponent::HandleHealthChanged(AActor* DamageInstigator, AActor* DamageCauser, const FGameplayEffectSpec* DamageEffectSpec, float DamageMagnitude, float OldValue, float NewValue)
 {
+	UE_LOG(
+		LogLyra,
+		Log,
+		TEXT("Health changed: Owner=%s Instigator=%s Causer=%s %.1f -> %.1f"),
+		*GetPathNameSafe(GetOwner()),
+		*GetPathNameSafe(DamageInstigator),
+		*GetPathNameSafe(DamageCauser),
+		OldValue,
+		NewValue);
+
 	OnHealthChanged.Broadcast(this, OldValue, NewValue, DamageInstigator);
 }
 

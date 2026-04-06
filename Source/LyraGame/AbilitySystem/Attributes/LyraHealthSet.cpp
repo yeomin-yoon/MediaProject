@@ -7,6 +7,7 @@
 #include "AbilitySystem/LyraAbilitySystemComponent.h"
 #include "Engine/World.h"
 #include "GameplayEffectExtension.h"
+#include "LyraLogChannels.h"
 #include "Messages/LyraVerbMessage.h"
 #include "GameFramework/GameplayMessageSubsystem.h"
 
@@ -127,6 +128,8 @@ void ULyraHealthSet::PostGameplayEffectExecute(const FGameplayEffectModCallbackD
 
 	if (Data.EvaluatedData.Attribute == GetDamageAttribute())
 	{
+		const float IncomingDamage = GetDamage();
+
 		// Send a standardized verb message that other systems can observe
 		if (Data.EvaluatedData.Magnitude > 0.0f)
 		{
@@ -147,6 +150,18 @@ void ULyraHealthSet::PostGameplayEffectExecute(const FGameplayEffectModCallbackD
 		// Convert into -Health and then clamp
 		SetHealth(FMath::Clamp(GetHealth() - GetDamage(), MinimumHealth, GetMaxHealth()));
 		SetDamage(0.0f);
+
+		UE_LOG(
+			LogLyra,
+			Log,
+			TEXT("HealthSet Damage Applied: Owner=%s Instigator=%s Causer=%s Effect=%s Damage=%.2f Health=%.2f -> %.2f"),
+			*GetPathNameSafe(GetOwningActor()),
+			*GetPathNameSafe(Instigator),
+			*GetPathNameSafe(Causer),
+			*GetPathNameSafe(Data.EffectSpec.Def),
+			IncomingDamage,
+			HealthBeforeAttributeChange,
+			GetHealth());
 	}
 	else if (Data.EvaluatedData.Attribute == GetHealingAttribute())
 	{
