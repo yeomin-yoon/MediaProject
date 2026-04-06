@@ -48,6 +48,20 @@ struct FJumpTestAction : public FTestAction
 };
 
 /**
+ * Input action to handle the Lyra player's dash action.
+ *
+ * @note Dash is handled by a button press which is a boolean value.
+ */
+struct FDashTestAction : public FTestAction
+{
+	FDashTestAction()
+	{
+		InputActionName = TEXT("IA_Ability_Dash");
+		InputActionValue = FInputActionValue(true);
+	}
+};
+
+/**
  * Base input action to handle the Lyra player's movement.
  *
  * @note Movement is setup as a 2D axis with the X-axis handling strafing and the Y-axis handling moving forward/backward.
@@ -150,6 +164,9 @@ public:
 
 	/** Simulate a button press for our jump action. */
 	void PerformJump();
+
+	/** Simulate a button press for our dash action. */
+	void PerformDash();
 
 	/** Simulates player movement input actions. */
 	void MoveForward();

@@ -17,6 +17,11 @@ void FShooterTestsPawnTestActions::PerformJump()
 	PerformAction(FJumpTestAction{});
 }
 
+void FShooterTestsPawnTestActions::PerformDash()
+{
+	PerformAction(FDashTestAction{});
+}
+
 void FShooterTestsPawnTestActions::MoveForward()
 {
 	PerformAxisAction(FMoveForwardTestAction{});
@@ -49,6 +54,8 @@ void FShooterTestsPawnTestActions::RotateRight()
 
 void FShooterTestsPawnTestActions::PerformAxisAction(TFunction<void(const APawn* Pawn)> Action)
 {
+	StartTime = FDateTime{};
+
 	// Perform move actions over the duration of 5 seconds
 	PerformAction(Action, [this]() -> bool {
 		if (StartTime.GetTicks() == 0)

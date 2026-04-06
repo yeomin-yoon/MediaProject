@@ -68,6 +68,7 @@ public:
 		Crouch,
 		Melee,
 		Jump,
+		Dash,
 		MoveForward,
 		MoveBackward,
 		StrafeLeft,

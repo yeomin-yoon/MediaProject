@@ -60,6 +60,24 @@ EDataValidationResult UActionCombatStyleData::IsDataValid(FDataValidationContext
             Result = EDataValidationResult::Invalid;
         }
 
+        if (Action.MotionValue < 0.0f)
+        {
+            Context.AddError(FText::FromString(FString::Printf(TEXT("Action %s must have MotionValue >= 0."), *Action.ActionTag.ToString())));
+            Result = EDataValidationResult::Invalid;
+        }
+
+        if (Action.PoiseDamage < 0.0f)
+        {
+            Context.AddError(FText::FromString(FString::Printf(TEXT("Action %s must have PoiseDamage >= 0."), *Action.ActionTag.ToString())));
+            Result = EDataValidationResult::Invalid;
+        }
+
+        if (Action.BuildupMultiplier < 0.0f)
+        {
+            Context.AddError(FText::FromString(FString::Printf(TEXT("Action %s must have BuildupMultiplier >= 0."), *Action.ActionTag.ToString())));
+            Result = EDataValidationResult::Invalid;
+        }
+
         if (Action.QueueWindowStartsAtNormalizedTime > Action.QueueWindowClosesAtNormalizedTime)
         {
             Context.AddError(FText::FromString(FString::Printf(TEXT("Action %s has QueueWindowStartsAtNormalizedTime after QueueWindowClosesAtNormalizedTime."), *Action.ActionTag.ToString())));

@@ -274,6 +274,21 @@ bool UActionCombatComponent::TryForceCommitBufferedCommand()
     return false;
 }
 
+void UActionCombatComponent::InterruptActiveAction()
+{
+    if (!HasRuntimeAuthority() || !ActiveActionState.ActionTag.IsValid())
+    {
+        return;
+    }
+
+    BufferedCommand.Reset();
+    PendingInterruptCommand.Reset();
+    OnBufferedCommandChanged.Broadcast(BufferedCommand.CommandTag);
+    EndActiveAction(true);
+    UpdateReplicatedStateFromLocal();
+    LogCommandFlow(TEXT("ActiveActionInterrupted"));
+}
+
 bool UActionCombatComponent::StartActionFromTag(FGameplayTag ActionTag)
 {
     if (!HasRuntimeAuthority())
@@ -327,11 +342,17 @@ void UActionCombatComponent::OnRep_ReplicatedState()
         {
             ActiveActionState.TraceSourceId = ReplicatedActionDefinition->TraceSourceId;
             ActiveActionState.HitWindowName = ReplicatedActionDefinition->HitWindowName;
+            ActiveActionState.MotionValue = ReplicatedActionDefinition->MotionValue;
+            ActiveActionState.PoiseDamage = ReplicatedActionDefinition->PoiseDamage;
+            ActiveActionState.BuildupMultiplier = ReplicatedActionDefinition->BuildupMultiplier;
         }
         else
         {
             ActiveActionState.TraceSourceId = NAME_None;
             ActiveActionState.HitWindowName = NAME_None;
+            ActiveActionState.MotionValue = 1.0f;
+            ActiveActionState.PoiseDamage = 0.0f;
+            ActiveActionState.BuildupMultiplier = 1.0f;
         }
     }
 
@@ -439,6 +460,13 @@ bool UActionCombatComponent::StartActionFromDefinition(const FActionCombatAction
         return false;
     }
 
+    FString OwnerTagFailureReason;
+    if (!DoesOwnerMeetActionTagRequirements(ActionDefinition, OwnerTagFailureReason))
+    {
+        LogCommandFlow(FString::Printf(TEXT("ActionRejected Tag=%s Reason=%s"), *ActionDefinition->ActionTag.ToString(), *OwnerTagFailureReason));
+        return false;
+    }
+
     FString ResourceFailureReason;
     if (!TryProcessActionResourceCosts(ActionDefinition, ResourceFailureReason))
     {
@@ -466,6 +494,9 @@ bool UActionCombatComponent::StartActionFromDefinition(const FActionCombatAction
     ActiveActionState.bStartedWhileFocusActive = bFocusActive;
     ActiveActionState.TraceSourceId = ActionDefinition->TraceSourceId;
     ActiveActionState.HitWindowName = ActionDefinition->HitWindowName;
+    ActiveActionState.MotionValue = ActionDefinition->MotionValue;
+    ActiveActionState.PoiseDamage = ActionDefinition->PoiseDamage;
+    ActiveActionState.BuildupMultiplier = ActionDefinition->BuildupMultiplier;
 
     if (bAutoPlayMontages && ActionDefinition->Montage)
     {
@@ -802,6 +833,51 @@ const FActionCombatTransitionDefinition* UActionCombatComponent::FindTransitionI
     }
 
     return nullptr;
+}
+
+bool UActionCombatComponent::DoesOwnerMeetActionTagRequirements(const FActionCombatActionDefinition* ActionDefinition, FString& OutFailureReason) const
+{
+    OutFailureReason.Reset();
+
+    if (!ActionDefinition)
+    {
+        OutFailureReason = TEXT("MissingActionDefinition");
+        return false;
+    }
+
+    if (ActionDefinition->RequiredOwnerTags.IsEmpty() && ActionDefinition->BlockedOwnerTags.IsEmpty())
+    {
+        return true;
+    }
+
+    UAbilitySystemComponent* AbilitySystemComponent = ResolveAbilitySystemComponent();
+    if (!AbilitySystemComponent)
+    {
+        if (!ActionDefinition->RequiredOwnerTags.IsEmpty())
+        {
+            OutFailureReason = TEXT("MissingAbilitySystemComponentForRequiredOwnerTags");
+            return false;
+        }
+
+        return true;
+    }
+
+    FGameplayTagContainer OwnerTags;
+    AbilitySystemComponent->GetOwnedGameplayTags(OwnerTags);
+
+    if (!ActionDefinition->RequiredOwnerTags.IsEmpty() && !OwnerTags.HasAll(ActionDefinition->RequiredOwnerTags))
+    {
+        OutFailureReason = FString::Printf(TEXT("MissingOwnerTags Required=%s Current=%s"), *ActionDefinition->RequiredOwnerTags.ToStringSimple(), *OwnerTags.ToStringSimple());
+        return false;
+    }
+
+    if (!ActionDefinition->BlockedOwnerTags.IsEmpty() && OwnerTags.HasAny(ActionDefinition->BlockedOwnerTags))
+    {
+        OutFailureReason = FString::Printf(TEXT("BlockedByOwnerTags Blocked=%s Current=%s"), *ActionDefinition->BlockedOwnerTags.ToStringSimple(), *OwnerTags.ToStringSimple());
+        return false;
+    }
+
+    return true;
 }
 
 bool UActionCombatComponent::TryProcessActionResourceCosts(const FActionCombatActionDefinition* ActionDefinition, FString& OutFailureReason)

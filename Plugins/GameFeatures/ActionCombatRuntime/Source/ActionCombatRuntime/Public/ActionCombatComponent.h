@@ -62,6 +62,15 @@ struct ACTIONCOMBATRUNTIME_API FActionCombatActiveActionState
     UPROPERTY(BlueprintReadOnly, Category = "Action")
     FName HitWindowName = NAME_None;
 
+    UPROPERTY(BlueprintReadOnly, Category = "Damage")
+    float MotionValue = 1.0f;
+
+    UPROPERTY(BlueprintReadOnly, Category = "Damage")
+    float PoiseDamage = 0.0f;
+
+    UPROPERTY(BlueprintReadOnly, Category = "Damage")
+    float BuildupMultiplier = 1.0f;
+
     void Reset()
     {
         ActionTag = FGameplayTag();
@@ -72,6 +81,9 @@ struct ACTIONCOMBATRUNTIME_API FActionCombatActiveActionState
         bUsingMontageTiming = false;
         TraceSourceId = NAME_None;
         HitWindowName = NAME_None;
+        MotionValue = 1.0f;
+        PoiseDamage = 0.0f;
+        BuildupMultiplier = 1.0f;
     }
 };
 
@@ -219,6 +231,9 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Action Combat|Runtime")
     bool TryForceCommitBufferedCommand();
 
+    UFUNCTION(BlueprintCallable, Category = "Action Combat|Runtime")
+    void InterruptActiveAction();
+
     UFUNCTION(BlueprintCallable, Category = "Action Combat|Debug")
     bool StartActionFromTag(FGameplayTag ActionTag);
 
@@ -287,6 +302,7 @@ private:
     bool IsCurrentActionFinished() const;
     const FActionCombatActionDefinition* FindActionDefinitionInLayers(const FGameplayTag& ActionTag, const UActionCombatStyleData*& OutSourceStyle) const;
     const FActionCombatTransitionDefinition* FindTransitionInLayers(const FGameplayTag& FromActionTag, const FActionCombatBufferedCommandState& CommandRequest) const;
+    bool DoesOwnerMeetActionTagRequirements(const FActionCombatActionDefinition* ActionDefinition, FString& OutFailureReason) const;
     bool TryProcessActionResourceCosts(const FActionCombatActionDefinition* ActionDefinition, FString& OutFailureReason);
     UAbilitySystemComponent* ResolveAbilitySystemComponent() const;
     static FString FormatAttributeName(const FGameplayAttribute& Attribute);

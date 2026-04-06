@@ -1,10 +1,12 @@
 #include "ActionCombatLyraAbilityBridgeComponent.h"
 
 #include "ActionCombatBlueprintLibrary.h"
+#include "ActionCombatLyraBridgeTags.h"
 #include "ActionCombatComponent.h"
 #include "ActionCombatMeleeTraceComponent.h"
 #include "ActionCombatRuntimeLog.h"
 
+#include "Abilities/GameplayAbility.h"
 #include "AbilitySystem/LyraAbilitySystemComponent.h"
 #include "Character/LyraPawnExtensionComponent.h"
 #include "GameFramework/Pawn.h"
@@ -14,16 +16,24 @@ UActionCombatLyraAbilityBridgeComponent::UActionCombatLyraAbilityBridgeComponent
 {
     PrimaryComponentTick.bCanEverTick = false;
     PrimaryComponentTick.bStartWithTickEnabled = false;
+    ObservedDashAbilityTag = ActionCombatLyraBridgeTags::Ability_Type_Action_Dash;
+    GrantedDashStateTag = ActionCombatLyraBridgeTags::Combat_State_Dodge;
+    GrantedDashIFrameStateTag = ActionCombatLyraBridgeTags::Combat_State_Dodge_IFrame;
+    FallbackDashAbilityClass = TSoftClassPtr<UGameplayAbility>(FSoftClassPath(TEXT("/ShooterCore/Game/Dash/GA_Hero_Dash.GA_Hero_Dash_C")));
+    FallbackDashInputTag = FGameplayTag::RequestGameplayTag(TEXT("InputTag.Ability.Dash"), false);
 }
 
 void UActionCombatLyraAbilityBridgeComponent::BeginPlay()
 {
     Super::BeginPlay();
+    BindPawnExtension();
     TryBindCombatComponent();
+    HandleAbilitySystemInitialized();
 }
 
 void UActionCombatLyraAbilityBridgeComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
+    UnbindLyraAbilitySystemComponent();
     UnbindCombatComponent();
     Super::EndPlay(EndPlayReason);
 }
@@ -32,6 +42,16 @@ void UActionCombatLyraAbilityBridgeComponent::RefreshCombatBinding()
 {
     UnbindCombatComponent();
     TryBindCombatComponent();
+    HandleAbilitySystemInitialized();
+}
+
+void UActionCombatLyraAbilityBridgeComponent::BindPawnExtension()
+{
+    if (ULyraPawnExtensionComponent* PawnExtension = ResolvePawnExtensionComponent())
+    {
+        PawnExtension->OnAbilitySystemInitialized_RegisterAndCall(FSimpleMulticastDelegate::FDelegate::CreateUObject(this, &ThisClass::HandleAbilitySystemInitialized));
+        PawnExtension->OnAbilitySystemUninitialized_Register(FSimpleMulticastDelegate::FDelegate::CreateUObject(this, &ThisClass::HandleAbilitySystemUninitialized));
+    }
 }
 
 void UActionCombatLyraAbilityBridgeComponent::TryBindCombatComponent()
@@ -57,6 +77,189 @@ void UActionCombatLyraAbilityBridgeComponent::UnbindCombatComponent()
     }
 
     BoundCombatComponent.Reset();
+}
+
+void UActionCombatLyraAbilityBridgeComponent::BindLyraAbilitySystemComponent(ULyraAbilitySystemComponent* AbilitySystemComponent)
+{
+    if (BoundAbilitySystemComponent.Get() == AbilitySystemComponent)
+    {
+        RefreshMirroredDashStateFromAbilitySystem();
+        return;
+    }
+
+    UnbindLyraAbilitySystemComponent();
+
+    if (!AbilitySystemComponent)
+    {
+        return;
+    }
+
+    BoundAbilitySystemComponent = AbilitySystemComponent;
+    bObservedDashAbilityTagActive = false;
+    ActiveObservedDashAbilityCount = 0;
+    EnsureFallbackDashAbilityGranted();
+
+    const APawn* Pawn = ResolvePawnOwner();
+    const bool bShouldMirrorDashState = bMirrorDashAbilityToCombatState
+        && ObservedDashAbilityTag.IsValid()
+        && (!bMirrorDashStateOnlyOnAuthority || (Pawn && Pawn->HasAuthority()));
+
+    if (!bShouldMirrorDashState)
+    {
+        return;
+    }
+
+    DashAbilityTagChangedHandle = AbilitySystemComponent->RegisterGameplayTagEvent(ObservedDashAbilityTag).AddUObject(this, &ThisClass::HandleObservedDashAbilityTagChanged);
+    DashAbilityActivatedHandle = AbilitySystemComponent->AbilityActivatedCallbacks.AddUObject(this, &ThisClass::HandleObservedAbilityActivated);
+    DashAbilityEndedHandle = AbilitySystemComponent->AbilityEndedCallbacks.AddUObject(this, &ThisClass::HandleObservedAbilityEnded);
+    RefreshMirroredDashStateFromAbilitySystem();
+    LogBridge(FString::Printf(TEXT("Bound dash dodge mirroring to ASC. ObservedTag=%s"), *ObservedDashAbilityTag.ToString()));
+}
+
+void UActionCombatLyraAbilityBridgeComponent::UnbindLyraAbilitySystemComponent()
+{
+    if (ULyraAbilitySystemComponent* AbilitySystemComponent = BoundAbilitySystemComponent.Get())
+    {
+        if (DashAbilityTagChangedHandle.IsValid() && ObservedDashAbilityTag.IsValid())
+        {
+            AbilitySystemComponent->UnregisterGameplayTagEvent(DashAbilityTagChangedHandle, ObservedDashAbilityTag);
+            DashAbilityTagChangedHandle.Reset();
+        }
+
+        if (DashAbilityActivatedHandle.IsValid())
+        {
+            AbilitySystemComponent->AbilityActivatedCallbacks.Remove(DashAbilityActivatedHandle);
+            DashAbilityActivatedHandle.Reset();
+        }
+
+        if (DashAbilityEndedHandle.IsValid())
+        {
+            AbilitySystemComponent->AbilityEndedCallbacks.Remove(DashAbilityEndedHandle);
+            DashAbilityEndedHandle.Reset();
+        }
+
+        SetMirroredDashStateActive(false);
+    }
+
+    BoundAbilitySystemComponent.Reset();
+    bMirroredDashStateActive = false;
+    bObservedDashAbilityTagActive = false;
+    ActiveObservedDashAbilityCount = 0;
+}
+
+void UActionCombatLyraAbilityBridgeComponent::EnsureFallbackDashAbilityGranted()
+{
+    if (!bGrantFallbackDashAbilityOnServerIfMissing)
+    {
+        return;
+    }
+
+    APawn* Pawn = ResolvePawnOwner();
+    ULyraAbilitySystemComponent* AbilitySystemComponent = BoundAbilitySystemComponent.Get();
+    if (!Pawn || !Pawn->HasAuthority() || !AbilitySystemComponent)
+    {
+        return;
+    }
+
+    if (HasObservedDashAbilitySpec(*AbilitySystemComponent))
+    {
+        return;
+    }
+
+    TSubclassOf<UGameplayAbility> DashAbilityClass = FallbackDashAbilityClass.LoadSynchronous();
+    if (!DashAbilityClass)
+    {
+        LogBridge(TEXT("Fallback dash ability grant skipped because the configured class could not be loaded."));
+        return;
+    }
+
+    FGameplayAbilitySpec DashAbilitySpec(DashAbilityClass, 1, INDEX_NONE, this);
+    if (FallbackDashInputTag.IsValid())
+    {
+        DashAbilitySpec.GetDynamicSpecSourceTags().AddTag(FallbackDashInputTag);
+    }
+
+    AbilitySystemComponent->GiveAbility(DashAbilitySpec);
+    LogBridge(FString::Printf(TEXT("Granted fallback dash ability %s with input tag %s."), *GetNameSafe(DashAbilityClass), *FallbackDashInputTag.ToString()));
+}
+
+bool UActionCombatLyraAbilityBridgeComponent::HasObservedDashAbilitySpec(const ULyraAbilitySystemComponent& AbilitySystemComponent) const
+{
+    for (const FGameplayAbilitySpec& AbilitySpec : AbilitySystemComponent.GetActivatableAbilities())
+    {
+        if (IsObservedDashAbility(AbilitySpec.Ability) || AbilitySpec.GetDynamicSpecSourceTags().HasTagExact(FallbackDashInputTag))
+        {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+void UActionCombatLyraAbilityBridgeComponent::RefreshMirroredDashStateFromAbilitySystem()
+{
+    const ULyraAbilitySystemComponent* AbilitySystemComponent = BoundAbilitySystemComponent.Get();
+    bObservedDashAbilityTagActive = AbilitySystemComponent && ObservedDashAbilityTag.IsValid() && AbilitySystemComponent->HasMatchingGameplayTag(ObservedDashAbilityTag);
+    const bool bDashAbilityActive = bObservedDashAbilityTagActive || (ActiveObservedDashAbilityCount > 0);
+    SetMirroredDashStateActive(bDashAbilityActive);
+}
+
+void UActionCombatLyraAbilityBridgeComponent::SetMirroredDashStateActive(bool bNewDashStateActive)
+{
+    if (!bMirrorDashAbilityToCombatState)
+    {
+        return;
+    }
+
+    ULyraAbilitySystemComponent* AbilitySystemComponent = BoundAbilitySystemComponent.Get();
+    if (!AbilitySystemComponent)
+    {
+        bMirroredDashStateActive = false;
+        return;
+    }
+
+    if (bMirroredDashStateActive == bNewDashStateActive)
+    {
+        return;
+    }
+
+    bMirroredDashStateActive = bNewDashStateActive;
+
+    if (GrantedDashStateTag.IsValid())
+    {
+        AbilitySystemComponent->SetLooseGameplayTagCount(GrantedDashStateTag, bMirroredDashStateActive ? 1 : 0);
+    }
+
+    if (GrantedDashIFrameStateTag.IsValid())
+    {
+        const int32 NewIFrameCount = (bMirroredDashStateActive && bMirrorDashAbilityToIFrameState) ? 1 : 0;
+        AbilitySystemComponent->SetLooseGameplayTagCount(GrantedDashIFrameStateTag, NewIFrameCount);
+    }
+
+    if (bMirroredDashStateActive && bInterruptActiveCombatActionOnDashStart)
+    {
+        if (UActionCombatComponent* CombatComponent = ResolveActionCombatComponent())
+        {
+            CombatComponent->InterruptActiveAction();
+        }
+    }
+
+    LogBridge(FString::Printf(
+        TEXT("Dash dodge state %s. DodgeTag=%s IFrameTag=%s"),
+        bMirroredDashStateActive ? TEXT("Enabled") : TEXT("Disabled"),
+        *GrantedDashStateTag.ToString(),
+        *GrantedDashIFrameStateTag.ToString()));
+}
+
+bool UActionCombatLyraAbilityBridgeComponent::IsObservedDashAbility(const UGameplayAbility* Ability) const
+{
+    if (!Ability || !ObservedDashAbilityTag.IsValid())
+    {
+        return false;
+    }
+
+    return Ability->GetAssetTags().HasTagExact(ObservedDashAbilityTag)
+        || Ability->GetName().Contains(TEXT("Dash"));
 }
 
 void UActionCombatLyraAbilityBridgeComponent::HandleActionStarted(FActionCombatActiveActionState ActionState)
@@ -135,6 +338,11 @@ APawn* UActionCombatLyraAbilityBridgeComponent::ResolvePawnOwner() const
     return Cast<APawn>(GetOwner());
 }
 
+ULyraPawnExtensionComponent* UActionCombatLyraAbilityBridgeComponent::ResolvePawnExtensionComponent() const
+{
+    return ULyraPawnExtensionComponent::FindPawnExtensionComponent(ResolvePawnOwner());
+}
+
 UActionCombatComponent* UActionCombatLyraAbilityBridgeComponent::ResolveActionCombatComponent() const
 {
     if (AActor* Owner = GetOwner())
@@ -188,4 +396,44 @@ FGameplayTag UActionCombatLyraAbilityBridgeComponent::ResolveEndedEventTag(const
     }
 
     return DefaultActionEndedEventTag;
+}
+
+void UActionCombatLyraAbilityBridgeComponent::HandleObservedDashAbilityTagChanged(const FGameplayTag ChangedTag, int32 NewCount)
+{
+    bObservedDashAbilityTagActive = (ChangedTag == ObservedDashAbilityTag) && (NewCount > 0);
+    SetMirroredDashStateActive(bObservedDashAbilityTagActive || (ActiveObservedDashAbilityCount > 0));
+}
+
+void UActionCombatLyraAbilityBridgeComponent::HandleObservedAbilityActivated(UGameplayAbility* Ability)
+{
+    if (!IsObservedDashAbility(Ability))
+    {
+        return;
+    }
+
+    ++ActiveObservedDashAbilityCount;
+    LogBridge(FString::Printf(TEXT("Observed dash ability activated. Ability=%s ActiveCount=%d"), *GetNameSafe(Ability), ActiveObservedDashAbilityCount));
+    SetMirroredDashStateActive(true);
+}
+
+void UActionCombatLyraAbilityBridgeComponent::HandleObservedAbilityEnded(UGameplayAbility* Ability)
+{
+    if (!IsObservedDashAbility(Ability))
+    {
+        return;
+    }
+
+    ActiveObservedDashAbilityCount = FMath::Max(ActiveObservedDashAbilityCount - 1, 0);
+    LogBridge(FString::Printf(TEXT("Observed dash ability ended. Ability=%s ActiveCount=%d"), *GetNameSafe(Ability), ActiveObservedDashAbilityCount));
+    SetMirroredDashStateActive(bObservedDashAbilityTagActive || (ActiveObservedDashAbilityCount > 0));
+}
+
+void UActionCombatLyraAbilityBridgeComponent::HandleAbilitySystemInitialized()
+{
+    BindLyraAbilitySystemComponent(ResolveLyraAbilitySystemComponent());
+}
+
+void UActionCombatLyraAbilityBridgeComponent::HandleAbilitySystemUninitialized()
+{
+    UnbindLyraAbilitySystemComponent();
 }

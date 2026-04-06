@@ -1,6 +1,7 @@
 #include "ActionCombatLyraInputBridgeComponent.h"
 
 #include "ActionCombatComponent.h"
+#include "ActionCombatLyraGuardComponent.h"
 #include "ActionCombatRuntimeLog.h"
 
 #include "Character/LyraHeroComponent.h"
@@ -163,10 +164,25 @@ void UActionCombatLyraInputBridgeComponent::HandleInputCompleted(FGameplayTag In
 
 void UActionCombatLyraInputBridgeComponent::ApplyStartedBinding(const FActionCombatLyraInputBinding& Binding)
 {
+    if (Binding.bSetGuardInputHeldOnStarted)
+    {
+        if (UActionCombatLyraGuardComponent* GuardComponent = ResolveGuardComponent())
+        {
+            GuardComponent->SetGuardInputHeld(true);
+        }
+        else
+        {
+            LogBinding(FString::Printf(TEXT("Started input could not enable guard because GuardComponent was missing. InputTag=%s"), *Binding.InputTag.ToString()));
+        }
+    }
+
     UActionCombatComponent* CombatComponent = ResolveActionCombatComponent();
     if (!CombatComponent)
     {
-        LogBinding(FString::Printf(TEXT("Started input ignored because ActionCombatComponent was missing. InputTag=%s"), *Binding.InputTag.ToString()));
+        if (Binding.StartedCommandTag.IsValid() || (Binding.bMirrorHeldStateWhilePressed && Binding.HeldInputStateTag.IsValid()) || Binding.bSetFocusActiveOnStarted)
+        {
+            LogBinding(FString::Printf(TEXT("Started input ignored because ActionCombatComponent was missing. InputTag=%s"), *Binding.InputTag.ToString()));
+        }
         return;
     }
 
@@ -188,10 +204,25 @@ void UActionCombatLyraInputBridgeComponent::ApplyStartedBinding(const FActionCom
 
 void UActionCombatLyraInputBridgeComponent::ApplyCompletedBinding(const FActionCombatLyraInputBinding& Binding)
 {
+    if (Binding.bClearGuardInputHeldOnCompleted)
+    {
+        if (UActionCombatLyraGuardComponent* GuardComponent = ResolveGuardComponent())
+        {
+            GuardComponent->SetGuardInputHeld(false);
+        }
+        else
+        {
+            LogBinding(FString::Printf(TEXT("Completed input could not disable guard because GuardComponent was missing. InputTag=%s"), *Binding.InputTag.ToString()));
+        }
+    }
+
     UActionCombatComponent* CombatComponent = ResolveActionCombatComponent();
     if (!CombatComponent)
     {
-        LogBinding(FString::Printf(TEXT("Completed input ignored because ActionCombatComponent was missing. InputTag=%s"), *Binding.InputTag.ToString()));
+        if (Binding.CompletedCommandTag.IsValid() || (Binding.bMirrorHeldStateWhilePressed && Binding.HeldInputStateTag.IsValid()) || Binding.bSetFocusInactiveOnCompleted)
+        {
+            LogBinding(FString::Printf(TEXT("Completed input ignored because ActionCombatComponent was missing. InputTag=%s"), *Binding.InputTag.ToString()));
+        }
         return;
     }
 
@@ -236,6 +267,21 @@ UActionCombatComponent* UActionCombatLyraInputBridgeComponent::ResolveActionComb
         }
 
         return Owner->FindComponentByClass<UActionCombatComponent>();
+    }
+
+    return nullptr;
+}
+
+UActionCombatLyraGuardComponent* UActionCombatLyraInputBridgeComponent::ResolveGuardComponent() const
+{
+    if (AActor* Owner = GetOwner())
+    {
+        if (UActionCombatLyraGuardComponent* ExplicitComponent = Cast<UActionCombatLyraGuardComponent>(GuardComponentReference.GetComponent(Owner)))
+        {
+            return ExplicitComponent;
+        }
+
+        return Owner->FindComponentByClass<UActionCombatLyraGuardComponent>();
     }
 
     return nullptr;
