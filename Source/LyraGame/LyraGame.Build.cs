@@ -44,7 +44,8 @@ public class LyraGame : ModuleRules
 				"ControlFlows",
 				"PropertyPath",
 				"StateTreeModule",
-				"GameplayStateTreeModule"
+				"GameplayStateTreeModule",
+				"ShooterCoreRuntime"
 			}
 		);
 

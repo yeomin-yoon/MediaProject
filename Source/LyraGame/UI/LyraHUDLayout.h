@@ -25,6 +25,7 @@ class ULyraHUDLayout : public ULyraActivatableWidget
 public:
 
 	ULyraHUDLayout(const FObjectInitializer& ObjectInitializer);
+	void NativeConstruct();
 
 	virtual void NativeOnInitialized() override;
 	virtual void NativeDestruct() override;
