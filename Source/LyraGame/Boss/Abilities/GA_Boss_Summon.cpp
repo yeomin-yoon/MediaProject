@@ -74,6 +74,21 @@ void UGA_Boss_Summon::OnSummonEventReceived(FGameplayEventData Payload)
 
 	AActor* Spawned = GetWorld()->SpawnActor<AActor>(MinionClass, SpawnLocation, SpawnRotation, SpawnParams);
 	UE_LOG(LogTemp, Warning, TEXT("[GA_Boss_Summon] 스폰 %s"), Spawned ? TEXT("성공") : TEXT("실패"));
+
+	
+	if (Spawned)
+	{
+		UAbilitySystemComponent* MinionAsc = Spawned->FindComponentByClass<UAbilitySystemComponent>();
+		if (MinionAsc)
+		{
+			FGameplayCueParameters CueParameters;
+			CueParameters.Location = SpawnLocation;
+			CueParameters.Instigator = GetAvatarActorFromActorInfo();
+			MinionAsc->ExecuteGameplayCue(FGameplayTag::RequestGameplayTag(FName("GameplayCue.Boss.Minion.SpawnIn")), CueParameters);
+		}
+	}
+	
+	
 }
 
 void UGA_Boss_Summon::OnMontageCompleted()

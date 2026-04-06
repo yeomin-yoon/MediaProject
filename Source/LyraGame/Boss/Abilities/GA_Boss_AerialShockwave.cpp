@@ -1,7 +1,7 @@
 #include "Boss/Abilities/GA_Boss_AerialShockwave.h"
 #include "AbilitySystemBlueprintLibrary.h"
 #include "AbilitySystemComponent.h"
-#include "Boss/BossCharacterBase.h"
+#include "Boss/Bear/BearBossBase.h"
 #include "Components/CapsuleComponent.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "Kismet/KismetSystemLibrary.h"
@@ -27,7 +27,7 @@ void UGA_Boss_AerialShockwave::ActivateAbility(const FGameplayAbilitySpecHandle 
 		return;
 	}
 
-	ABossCharacterBase* Boss = Cast<ABossCharacterBase>(GetAvatarActorFromActorInfo());
+	ABearBossBase* Boss = Cast<ABearBossBase>(GetAvatarActorFromActorInfo());
 	if (!Boss)
 	{
 		EndAbility(Handle, ActorInfo, ActivationInfo, true, true);
@@ -53,7 +53,7 @@ void UGA_Boss_AerialShockwave::ActivateAbility(const FGameplayAbilitySpecHandle 
 
 void UGA_Boss_AerialShockwave::OnBossLanded()
 {
-	ABossCharacterBase* Boss = Cast<ABossCharacterBase>(GetAvatarActorFromActorInfo());
+	ABearBossBase* Boss = Cast<ABearBossBase>(GetAvatarActorFromActorInfo());
 	if (!Boss)
 	{
 		EndAbility(CacheHandle, CacheActorInfo, CacheActivationInfo, true, true);
@@ -103,7 +103,7 @@ void UGA_Boss_AerialShockwave::EndAbility(const FGameplayAbilitySpecHandle Handl
 	bool bReplicateEndAbility,
 	bool bWasCancelled)
 {
-	ABossCharacterBase* Boss = Cast<ABossCharacterBase>(GetAvatarActorFromActorInfo());
+	ABearBossBase* Boss = Cast<ABearBossBase>(GetAvatarActorFromActorInfo());
 	if (Boss)
 	{
 		Boss->OnLandedDelegate.RemoveAll(this);

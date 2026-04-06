@@ -9,7 +9,7 @@
 // TODO: BossCharacterBase forward declaration 추가
 // 이유: 헤더에서 직접 include하면 컴파일 의존성이 생겨 빌드가 느려짐.
 //       실제 멤버 접근은 .cpp에서만 하므로 헤더엔 forward declaration으로 충분함.
-class ABossCharacterBase;
+class ABearBossBase;
 
 UCLASS()
 class LYRAGAME_API UGA_Boss_AerialShockwave : public ULyraGameplayAbility

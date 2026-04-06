@@ -3,7 +3,6 @@
 #include "AbilitySystem/LyraAbilitySet.h"
 #include "AbilitySystem/LyraAbilitySystemComponent.h"
 #include "AbilitySystemComponent.h"
-#include "GameFramework/CharacterMovementComponent.h"
 #include "GameFramework/PlayerController.h"
 
 ABossCharacterBase::ABossCharacterBase(const FObjectInitializer& ObjectInitializer)
@@ -37,30 +36,6 @@ void ABossCharacterBase::BeginPlay()
 	BossAbilitySet->GiveToAbilitySystem(BossASC, nullptr);
 }
 
-void ABossCharacterBase::Landed(const FHitResult& Hit)
-{
-	Super::Landed(Hit);
-
-	
-	bIsGrounded = true;
-	bIsJumping = false;
-
-	
-	OnLandedDelegate.Broadcast();
-}
-
-bool ABossCharacterBase::GetIsGrounded()
-{
-	bIsGrounded = !GetCharacterMovement()->IsFalling();
-	return bIsGrounded;
-}
-
-bool ABossCharacterBase::GetIsJumping()
-{
-	bIsJumping = GetCharacterMovement()->IsFalling();
-	return bIsJumping;
-}
-
 void ABossCharacterBase::Tick(float DeltaSeconds)
 {
 	Super::Tick(DeltaSeconds);
@@ -91,16 +66,6 @@ void ABossCharacterBase::Test()
 	}
 
 	ASC->TryActivateAbilityByClass(TestAbilityClass);
-}
-
-void ABossCharacterBase::SetIsGrounded(bool IsGrounded)
-{
-	bIsGrounded = IsGrounded;
-}
-
-void ABossCharacterBase::SetIsJumping(bool IsJumping)
-{
-	bIsJumping= IsJumping;
 }
 
 
