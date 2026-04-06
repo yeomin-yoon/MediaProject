@@ -6,6 +6,10 @@ Saved/
 
 # Build 스크립트 임시/캐시
 Build/Scripts/obj/
+Build/Scripts/*.csproj
+Build/Scripts/*.csproj.props
+Build/Scripts/*.csproj.user
+Build/Scripts/*.targets
 
 # IDE
 .vscode/
