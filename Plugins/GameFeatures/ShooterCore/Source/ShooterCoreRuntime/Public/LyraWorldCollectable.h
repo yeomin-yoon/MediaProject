@@ -15,8 +15,10 @@ struct FInteractionQuery;
 /**
  * 
  */
+class UProjectileMovementComponent;
+
 UCLASS(Abstract, Blueprintable)
-class ALyraWorldCollectable : public AActor, public IInteractableTarget, public IPickupable
+class SHOOTERCORERUNTIME_API ALyraWorldCollectable : public AActor, public IInteractableTarget, public IPickupable
 {
 	GENERATED_BODY()
 
@@ -33,4 +35,10 @@ protected:
 
 	UPROPERTY(EditAnywhere)
 	FInventoryPickup StaticInventory;
+	
+public:
+	void LaunchItem(FVector Velocity);
+
+	UPROPERTY(EditAnywhere)
+	TObjectPtr<UProjectileMovementComponent> ProjectileMovement;
 };
