@@ -3,6 +3,7 @@
 #include "CoreMinimal.h"
 #include "Character/LyraCharacterWithAbilities.h"
 #include "Abilities/GameplayAbility.h"
+#include "Data/BossAttackWeightData.h"
 #include "BossCharacterBase.generated.h"
 
 class ABossCharacterBaseAiController;
@@ -24,6 +25,12 @@ public:
 	// BP_TestBoss 등 각 보스 BP에서 값만 바꾸면 Task/Notify 코드 수정 없이 적용됨.
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Boss|Combat")
 	float AttackRange = 600.f;
+	UPROPERTY(EditDefaultsOnly, Category = "Boss|Combat")
+	TObjectPtr<UBossAttackWeightData> BossWeightData;
+	UPROPERTY(BlueprintReadOnly, Category = "Boss|Combat")
+	FGameplayTag SelectedAttackTag;
+	UPROPERTY(BlueprintReadOnly, Category = "Boss|Combat")
+	FGameplayTag LastAttackTag;
 
 protected:
 	virtual void BeginPlay() override;
@@ -33,6 +40,12 @@ protected:
 	// GiveToAbilitySystem() 호출 시 GA/GE/AttributeSet 일괄 부여
 	UPROPERTY(EditDefaultsOnly, Category = "Boss|Abilities")
 	TObjectPtr<ULyraAbilitySet> BossAbilitySet;
+	
+	
+
+	
+	
+	
 public:
 	// 테스트용: 1번 키로 활성화할 GA 클래스 (BP_TestBoss에서 지정)
 	UPROPERTY(EditDefaultsOnly, Category = "Boss|Debug")
