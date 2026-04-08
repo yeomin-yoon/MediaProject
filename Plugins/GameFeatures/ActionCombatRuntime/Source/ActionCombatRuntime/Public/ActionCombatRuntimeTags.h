@@ -1,0 +1,12 @@
+#pragma once
+
+#include "NativeGameplayTags.h"
+
+namespace ActionCombatRuntimeTags
+{
+    ACTIONCOMBATRUNTIME_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Combat_State_Reaction);
+    ACTIONCOMBATRUNTIME_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Combat_State_Reaction_LightHit);
+    ACTIONCOMBATRUNTIME_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Combat_State_Reaction_HeavyHit);
+    ACTIONCOMBATRUNTIME_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Combat_State_Reaction_Knockdown);
+    ACTIONCOMBATRUNTIME_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Combat_State_Reaction_GetUp);
+}

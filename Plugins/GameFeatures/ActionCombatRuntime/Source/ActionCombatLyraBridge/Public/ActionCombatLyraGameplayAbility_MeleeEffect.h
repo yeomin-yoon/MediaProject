@@ -13,6 +13,7 @@ class UGameplayEffect;
 class UActionCombatLyraGuardComponent;
 class UActionCombatMeleeTraceComponent;
 class UActionCombatWeaponResolverData;
+struct FActionCombatReactionResult;
 struct FTimerHandle;
 struct FGameplayEffectSpec;
 enum class EActionCombatLyraGuardOutcome : uint8;
@@ -108,6 +109,12 @@ protected:
     UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Action Combat|Guard")
     bool bApplyDamageOnGuardBreakHit = false;
 
+    UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Action Combat|Reaction")
+    bool bApplyReactionOnSuccessfulHit = true;
+
+    UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Action Combat|Reaction")
+    bool bScaleReactionByRecordedHitMultiplier = true;
+
     UFUNCTION(BlueprintImplementableEvent, Category = "Action Combat|Melee", DisplayName = "On Recorded Hit")
     void K2_OnRecordedHit(AActor* HitActor, FActionCombatRecordedHit RecordedHit, int32 HitIndex);
 
@@ -133,6 +140,7 @@ private:
     bool ShouldIgnoreRecordedHitFromTargetDodge(AActor* HitActor) const;
     bool ApplyEffectToRecordedHit(AActor* HitActor, UActionCombatMeleeTraceComponent* TraceComponent, const FActionCombatRecordedHit& RecordedHit) const;
     bool TryResolveGuardedHit(AActor* HitActor, const FActionCombatRecordedHit& RecordedHit, FActionCombatLyraGuardResult& OutGuardResult) const;
+    void TryApplyReactionToRecordedHit(AActor* HitActor, const FActionCombatRecordedHit& RecordedHit) const;
 
     UFUNCTION()
     void HandleRecordedHit(UActionCombatMeleeTraceComponent* TraceComponent, FActionCombatRecordedHit RecordedHit, int32 HitIndex);

@@ -1,6 +1,7 @@
 #include "ActionCombatComponent.h"
 
 #include "ActionCombatRuntimeLog.h"
+#include "ActionCombatRuntimeTags.h"
 
 #include "AbilitySystemComponent.h"
 #include "AbilitySystemGlobals.h"
@@ -847,6 +848,20 @@ bool UActionCombatComponent::DoesOwnerMeetActionTagRequirements(const FActionCom
 
     if (ActionDefinition->RequiredOwnerTags.IsEmpty() && ActionDefinition->BlockedOwnerTags.IsEmpty())
     {
+        UAbilitySystemComponent* AbilitySystemComponent = ResolveAbilitySystemComponent();
+        if (!AbilitySystemComponent)
+        {
+            return true;
+        }
+
+        FGameplayTagContainer OwnerTags;
+        AbilitySystemComponent->GetOwnedGameplayTags(OwnerTags);
+        if (OwnerTags.HasTag(ActionCombatRuntimeTags::Combat_State_Reaction))
+        {
+            OutFailureReason = FString::Printf(TEXT("BlockedByReactionState Current=%s"), *OwnerTags.ToStringSimple());
+            return false;
+        }
+
         return true;
     }
 
@@ -864,6 +879,12 @@ bool UActionCombatComponent::DoesOwnerMeetActionTagRequirements(const FActionCom
 
     FGameplayTagContainer OwnerTags;
     AbilitySystemComponent->GetOwnedGameplayTags(OwnerTags);
+
+    if (OwnerTags.HasTag(ActionCombatRuntimeTags::Combat_State_Reaction))
+    {
+        OutFailureReason = FString::Printf(TEXT("BlockedByReactionState Current=%s"), *OwnerTags.ToStringSimple());
+        return false;
+    }
 
     if (!ActionDefinition->RequiredOwnerTags.IsEmpty() && !OwnerTags.HasAll(ActionDefinition->RequiredOwnerTags))
     {

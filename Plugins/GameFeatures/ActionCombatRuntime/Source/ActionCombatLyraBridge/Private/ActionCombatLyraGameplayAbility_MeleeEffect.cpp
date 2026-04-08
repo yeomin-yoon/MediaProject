@@ -4,6 +4,7 @@
 #include "ActionCombatLyraBridgeTags.h"
 #include "ActionCombatLyraEquipmentResolver.h"
 #include "ActionCombatLyraGuardComponent.h"
+#include "ActionCombatReactionComponent.h"
 #include "ActionCombatStatsSet.h"
 #include "ActionCombatWeaponDefinition.h"
 #include "ActionCombatWeaponResolverData.h"
@@ -19,6 +20,7 @@
 #include "GameplayEffectTypes.h"
 #include "GameFramework/Actor.h"
 #include "TimerManager.h"
+#include "Teams/LyraTeamSubsystem.h"
 
 UActionCombatLyraGameplayAbility_MeleeEffect::UActionCombatLyraGameplayAbility_MeleeEffect(const FObjectInitializer& ObjectInitializer)
     : Super(ObjectInitializer)
@@ -409,6 +411,72 @@ bool UActionCombatLyraGameplayAbility_MeleeEffect::TryResolveGuardedHit(AActor* 
     return GuardComponent->TryResolveIncomingHit(IncomingHit, OutGuardResult);
 }
 
+void UActionCombatLyraGameplayAbility_MeleeEffect::TryApplyReactionToRecordedHit(AActor* HitActor, const FActionCombatRecordedHit& RecordedHit) const
+{
+    if (!bApplyReactionOnSuccessfulHit || (HitActor == nullptr))
+    {
+        return;
+    }
+
+    const AActor* AvatarActor = GetAvatarActorFromActorInfo();
+    if (AvatarActor == nullptr)
+    {
+        return;
+    }
+
+    if (ULyraTeamSubsystem* TeamSubsystem = HitActor->GetWorld() ? HitActor->GetWorld()->GetSubsystem<ULyraTeamSubsystem>() : nullptr)
+    {
+        if (!TeamSubsystem->CanCauseDamage(AvatarActor, HitActor))
+        {
+            return;
+        }
+    }
+
+    const FActionCombatAttackSnapshot Snapshot = bHasActivationAttackSnapshot ? ActivationAttackSnapshot : MakeAttackSnapshot();
+    float ResolvedPoiseDamage = FMath::Max(Snapshot.PoiseDamage, 0.0f);
+    if (bScaleReactionByRecordedHitMultiplier)
+    {
+        ResolvedPoiseDamage *= FMath::Max(RecordedHit.DamageMultiplier, 0.0f);
+    }
+
+    if (ResolvedPoiseDamage <= KINDA_SMALL_NUMBER)
+    {
+        return;
+    }
+
+    UActionCombatReactionComponent* ReactionComponent = UActionCombatReactionComponent::FindOrCreateReactionComponent(HitActor);
+    if (ReactionComponent == nullptr)
+    {
+        return;
+    }
+
+    FVector ImpulseDirection = (HitActor->GetActorLocation() - AvatarActor->GetActorLocation()).GetSafeNormal2D();
+    if (ImpulseDirection.IsNearlyZero())
+    {
+        ImpulseDirection = AvatarActor->GetActorForwardVector().GetSafeNormal2D();
+    }
+
+    FActionCombatReactionHit ReactionHit;
+    ReactionHit.PoiseDamage = ResolvedPoiseDamage;
+    ReactionHit.KnockdownPower = ResolvedPoiseDamage;
+    ReactionHit.WorldSpaceImpulseDirection = ImpulseDirection;
+    ReactionHit.InstigatorActor = const_cast<AActor*>(AvatarActor);
+
+    FActionCombatReactionResult ReactionResult;
+    if (ReactionComponent->TryApplyReactionHit(ReactionHit, ReactionResult))
+    {
+        UE_LOG(
+            LogActionCombatRuntime,
+            Log,
+            TEXT("[MeleeAbility:%s] ReactionResolved HitActor=%s Outcome=%d PoiseBefore=%.2f PoiseAfter=%.2f"),
+            *GetPathNameSafe(GetAvatarActorFromActorInfo()),
+            *GetNameSafe(HitActor),
+            static_cast<int32>(ReactionResult.Outcome),
+            ReactionResult.PoiseBefore,
+            ReactionResult.PoiseAfter);
+    }
+}
+
 void UActionCombatLyraGameplayAbility_MeleeEffect::HandleRecordedHit(UActionCombatMeleeTraceComponent* TraceComponent, FActionCombatRecordedHit RecordedHit, int32 HitIndex)
 {
     AActor* HitActor = RecordedHit.HitResult.GetActor();
@@ -486,6 +554,7 @@ void UActionCombatLyraGameplayAbility_MeleeEffect::HandleRecordedHit(UActionComb
 
     if (ApplyEffectToRecordedHit(HitActor, TraceComponent, RecordedHit))
     {
+        TryApplyReactionToRecordedHit(HitActor, RecordedHit);
         HitActorsDuringActivation.Add(TObjectKey<AActor>(HitActor));
         K2_OnTargetEffectApplied(HitActor, RecordedHit, HitIndex);
 
