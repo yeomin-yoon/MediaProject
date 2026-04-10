@@ -41,7 +41,6 @@ EStateTreeRunStatus FSTTask_Boss_Summon::EnterState(FStateTreeExecutionContext& 
 		return EStateTreeRunStatus::Failed;
 	}
 
-	// ASC에 등록된 GA 목록과 태그 출력
 	for (const FGameplayAbilitySpec& Spec : ASC->GetActivatableAbilities())
 	{
 		UE_LOG(LogTemp, Warning, TEXT("[STTask_Boss_Summon] 등록된 GA: %s | Tags: %s"),
@@ -58,7 +57,6 @@ EStateTreeRunStatus FSTTask_Boss_Summon::EnterState(FStateTreeExecutionContext& 
 		return EStateTreeRunStatus::Failed;
 	}
 
-	// GA 종료 시 bIsEnd = true
 	const FGameplayTag SummonTag = FGameplayTag::RequestGameplayTag(FName("Boss.Attack.Summon"));
 	FInstanceDataType* DataPtr = &Data;
 	Data.AbilityEndCallbackHandle = ASC->AbilityEndedCallbacks.AddLambda(
@@ -66,7 +64,6 @@ EStateTreeRunStatus FSTTask_Boss_Summon::EnterState(FStateTreeExecutionContext& 
 		{
 			if (EndedAbility && EndedAbility->AbilityTags.HasTag(SummonTag))
 			{
-				UE_LOG(LogTemp, Warning, TEXT("[STTask_Boss_Summon] GA 종료 감지 → Succeeded로 전환"));
 				DataPtr->bIsEnd = true;
 			}
 		}
