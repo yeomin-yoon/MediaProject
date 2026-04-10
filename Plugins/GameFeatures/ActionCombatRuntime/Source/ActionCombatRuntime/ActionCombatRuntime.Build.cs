@@ -13,7 +13,8 @@ public class ActionCombatRuntime : ModuleRules
                 "CoreUObject",
                 "Engine",
                 "GameplayAbilities",
-                "GameplayTags"
+                "GameplayTags",
+                "NetCore"
             });
 
         PrivateDependencyModuleNames.AddRange(
