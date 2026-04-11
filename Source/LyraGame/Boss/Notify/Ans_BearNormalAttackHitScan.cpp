@@ -27,12 +27,12 @@ void UAns_BearNormalAttackHitScan::NotifyTick(USkeletalMeshComponent* MeshComp, 
 	TArray<FHitResult> HitResults;
 	UKismetSystemLibrary::SphereTraceMulti(Boss, leftHandLocation, leftHandLocation, TraceRadius,
 		UEngineTypes::ConvertToTraceType(ECC_Pawn), false, IgnoreActors,
-		EDrawDebugTrace::ForDuration, HitResults, true);
+		EDrawDebugTrace::ForOneFrame, HitResults, true);
 
 	TArray<FHitResult> RightHitResults;
 	UKismetSystemLibrary::SphereTraceMulti(Boss, rightHandLocation, rightHandLocation, TraceRadius,
 		UEngineTypes::ConvertToTraceType(ECC_Pawn), false, IgnoreActors,
-		EDrawDebugTrace::ForDuration, RightHitResults, true);
+		EDrawDebugTrace::ForOneFrame, RightHitResults, true);
 
 	HitResults.Append(RightHitResults);
 

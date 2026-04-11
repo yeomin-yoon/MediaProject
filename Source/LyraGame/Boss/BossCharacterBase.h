@@ -34,7 +34,8 @@ public:
 	//가장 최근에 한 공격 태그
 	UPROPERTY(BlueprintReadOnly, Category = "Boss|Combat")
 	FGameplayTag LastAttackTag;
-
+	
+	
 protected:
 	virtual void BeginPlay() override;
 	virtual void Tick(float DeltaSeconds) override;

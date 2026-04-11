@@ -19,14 +19,31 @@ public:
 
 	UPROPERTY(BlueprintReadOnly, EditAnywhere, Category = "Boss|Abilities")
 	bool bIsJumping = false;
+	
+	UPROPERTY(BlueprintReadOnly, Category = "Boss|Combat")
+	bool bIsCharge = false;
+	
+	UPROPERTY(EditDefaultsOnly, Category = "Boss|Combat")
+	float ChargeSpd =1500.f;
 
 	bool GetIsGrounded();
 	bool GetIsJumping();
+	
 	void SetIsGrounded(bool IsGrounded);
 	void SetIsJumping(bool IsJumping);
+	
+	bool GetIsCharge();
+	void SetIsCharge(bool IsCharge);
+	
+	
+	void ChargeStart();
+	void ChargeEnd();
+	
 
 	FOnBossLanded OnLandedDelegate;
 
 protected:
 	virtual void Landed(const FHitResult& Hit) override;
+	
+	
 };
