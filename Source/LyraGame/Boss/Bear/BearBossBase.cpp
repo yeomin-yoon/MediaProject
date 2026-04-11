@@ -37,3 +37,25 @@ void ABearBossBase::SetIsJumping(bool IsJumping)
 {
 	bIsJumping = IsJumping;
 }
+
+bool ABearBossBase::GetIsCharge()
+{
+	return bIsCharge;
+}
+
+void ABearBossBase::SetIsCharge(bool IsCharge)
+{
+	bIsCharge = IsCharge;
+}
+
+void ABearBossBase::ChargeStart()
+{
+	bIsCharge = true;
+	
+}
+
+void ABearBossBase::ChargeEnd()
+{
+	bIsCharge=false;
+	GetCharacterMovement()->StopMovementImmediately();
+}

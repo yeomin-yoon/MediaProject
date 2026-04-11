@@ -1,19 +1,9 @@
 #include "BossCharacterBaseAiController.h"
 
-// ============================================================
-// FBossAggroEntry
-// ============================================================
-
 bool FBossAggroEntry::operator<(const FBossAggroEntry& Other) const
 {
-	// TODO: 최대힙 조건 구현 (내 Damage가 Other보다 작으면 true)
 	return false;
 }
-
-
-// ============================================================
-// ABossCharacterBaseAiController
-// ============================================================
 
 ABossCharacterBaseAiController::ABossCharacterBaseAiController(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
@@ -41,33 +31,37 @@ void ABossCharacterBaseAiController::RegisterTarget(AActor* NewTarget)
 
 void ABossCharacterBaseAiController::UpdateAggro(AActor* DamageDealer, float Damage)
 {
-	// TODO: 유효성 검사
-	// TODO: BossAggroEnters에서 DamageDealer 엔트리 찾기 (선형 탐색)
-	// TODO: 해당 엔트리 Damage += Damage
-	// TODO: BossAggroEnters.Heapify() 로 힙 재정렬
 }
 
 AActor* ABossCharacterBaseAiController::GetHighestAggroTarget() const
 {
-	// TODO: BossAggroEnters 비어있으면 nullptr
-	// TODO: BossAggroEnters.HeapTop().TargetActor 반환
 	return nullptr;
 }
 
-AActor* ABossCharacterBaseAiController::GetNearestTarget() const
+AActor* ABossCharacterBaseAiController::GetNearestTarget() const //임시로 firstplayer정보 가져오기
 {
-	if (!GetWorld()) return nullptr;
+	if (!GetWorld())
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[BossAI] GetNearestTarget: GetWorld() nullptr"));
+		return nullptr;
+	}
 	APlayerController* PC = GetWorld()->GetFirstPlayerController();
-	return PC->GetPawn();
+	if (!PC)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[BossAI] GetNearestTarget: PlayerController nullptr"));
+		return nullptr;
+	}
+	APawn* PlayerPawn = PC->GetPawn();
+	if (!PlayerPawn)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[BossAI] GetNearestTarget: PlayerPawn nullptr"));
+		return nullptr;
+	}
+	return PlayerPawn;
 }
-
-// ============================================================
-// ILyraTeamAgentInterface
-// ============================================================
 
 void ABossCharacterBaseAiController::SetGenericTeamId(const FGenericTeamId& NewTeamID)
 {
-	// 보스 팀 ID는 고정 (외부 변경 불필요)
 }
 
 FGenericTeamId ABossCharacterBaseAiController::GetGenericTeamId() const

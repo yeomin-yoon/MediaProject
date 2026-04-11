@@ -16,23 +16,18 @@ void ABossCharacterBase::BeginPlay()
 {
 	Super::BeginPlay();
 
-	// 서버(Authority)에서만 GA를 부여해야 함 (GiveToAbilitySystem 내부도 체크하지만 명시적으로 확인)
-	// 싱글플레이에서는 항상 Authority이므로 정상 동작
 	if (!HasAuthority() || !BossAbilitySet)
 	{
 		return;
 	}
 
-	// LyraCharacterWithAbilities에 내장된 ASC를 가져옴
-	// Cast 실패 시 nullptr → 부여 건너뜀
 	ULyraAbilitySystemComponent* BossASC = Cast<ULyraAbilitySystemComponent>(GetAbilitySystemComponent());
 	if (!BossASC)
 	{
 		return;
 	}
 
-	// BossAbilitySet에 등록된 GA/GE/AttributeSet을 ASC에 일괄 부여
-	// OutGrantedHandles는 나중에 페이즈 전환 시 회수(TakeFromAbilitySystem)할 때 필요하면 멤버로 승격
+	//ASC에 등록
 	BossAbilitySet->GiveToAbilitySystem(BossASC, nullptr);
 }
 
@@ -46,26 +41,6 @@ void ABossCharacterBase::Tick(float DeltaSeconds)
 		return;
 	}
 
-	if (PC->WasInputKeyJustPressed(EKeys::One))
-	{
-		Test();
-	}
+	
 }
-
-void ABossCharacterBase::Test()
-{
-	UAbilitySystemComponent* ASC = GetAbilitySystemComponent();
-	if (!ASC)
-	{
-		return;
-	}
-
-	if (!TestAbilityClass)
-	{
-		return;
-	}
-
-	ASC->TryActivateAbilityByClass(TestAbilityClass);
-}
-
 

@@ -26,19 +26,16 @@ EStateTreeRunStatus FSTTask_Boss_BehaviorSelector::EnterState(FStateTreeExecutio
 EStateTreeRunStatus FSTTask_Boss_BehaviorSelector::Tick(FStateTreeExecutionContext& Context,
 	const float DeltaTime) const
 {
-	// TODO: 구현
 	return EStateTreeRunStatus::Running;
 }
 
 void FSTTask_Boss_BehaviorSelector::ExitState(FStateTreeExecutionContext& Context,
 	const FStateTreeTransitionResult& Transition) const
 {
-	// TODO: StopMovement
 }
 
 int32 FSTTask_Boss_BehaviorSelector::SelectAction(const TArray<FBossActionData>& Actions,
 	float Distance, float CurrentTime) const
 {
-	// TODO: 필터링 → 가중치 계산 → 룰렛 휠
 	return -1;
 }

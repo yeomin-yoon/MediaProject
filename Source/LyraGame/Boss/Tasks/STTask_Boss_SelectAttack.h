@@ -28,7 +28,6 @@ struct FSTTask_Boss_SelectAttack : public FStateTreeTaskCommonBase
 
 	virtual bool Link(FStateTreeLinker& Linker) override;
 
-	// TODO: 가중치 선택 로직 구현
 	virtual EStateTreeRunStatus EnterState(FStateTreeExecutionContext& Context,
 	                                       const FStateTreeTransitionResult& Transition) const override;
 

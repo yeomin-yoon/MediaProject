@@ -4,7 +4,6 @@
 #include "Boss/BossCharacterBase.h"
 #include "BearBossBase.generated.h"
 
-// 착지 이벤트 델리게이트 — GA_Boss_AerialShockwave가 바인딩해 착지 타이밍을 감지
 DECLARE_MULTICAST_DELEGATE(FOnBossLanded);
 
 UCLASS()
@@ -20,16 +19,31 @@ public:
 
 	UPROPERTY(BlueprintReadOnly, EditAnywhere, Category = "Boss|Abilities")
 	bool bIsJumping = false;
+	
+	UPROPERTY(BlueprintReadOnly, Category = "Boss|Combat")
+	bool bIsCharge = false;
+	
+	UPROPERTY(EditDefaultsOnly, Category = "Boss|Combat")
+	float ChargeSpd =1500.f;
 
 	bool GetIsGrounded();
 	bool GetIsJumping();
+	
 	void SetIsGrounded(bool IsGrounded);
 	void SetIsJumping(bool IsJumping);
+	
+	bool GetIsCharge();
+	void SetIsCharge(bool IsCharge);
+	
+	
+	void ChargeStart();
+	void ChargeEnd();
+	
 
-	// GA가 여기에 바인딩하고, Landed()에서 Broadcast — UPROPERTY 불필요(UObject 아님)
 	FOnBossLanded OnLandedDelegate;
 
 protected:
-	// 물리 기반 착지 감지 → OnLandedDelegate Broadcast
 	virtual void Landed(const FHitResult& Hit) override;
+	
+	
 };

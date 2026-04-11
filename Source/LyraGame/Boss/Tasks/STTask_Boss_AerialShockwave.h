@@ -40,7 +40,6 @@ struct FSTTask_Boss_AerialShockwave : public FStateTreeTaskCommonBase
 	virtual void ExitState(FStateTreeExecutionContext& Context,
 		const FStateTreeTransitionResult& Transition) const override;
 
-	// 착지 후 대기 시간 (StateTree 에디터에서 조정 가능)
 	UPROPERTY(EditDefaultsOnly, Category = "Boss|AerialAttack")
 	float LandingStayDuration = 2.5f;
 

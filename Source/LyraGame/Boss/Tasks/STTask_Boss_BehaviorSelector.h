@@ -38,9 +38,12 @@ struct FSTTask_Boss_BehaviorSelectorInstanceData
 {
 	GENERATED_BODY()
 
-	UPROPERTY(EditAnywhere) TArray<FBossActionData> Actions; // 보스가 할 수 있는 행동들
-	UPROPERTY() EBossSelectorState SelectorState = EBossSelectorState::Idle; // 기본 스테이트
-	UPROPERTY() int32 ActiveActionIndex = -1;// 액션 고유 넘버
+	UPROPERTY(EditAnywhere) 
+	TArray<FBossActionData> Actions; // 보스가 할 수 있는 행동들
+	UPROPERTY() 
+	EBossSelectorState SelectorState = EBossSelectorState::Idle; // 기본 스테이트
+	UPROPERTY() 
+	int32 ActiveActionIndex = -1;// 액션 고유 넘버
 };
 
 USTRUCT(meta = (DisplayName = "Boss Behavior Selector"))

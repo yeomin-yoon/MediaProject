@@ -351,6 +351,10 @@
 		{
 			"Name": "RuntimeTests",
 			"Enabled": true
+		},
+		{
+			"Name": "CascadeToNiagaraConverter",
+			"Enabled": true
 		}
 	],
 	"EpicSampleNameHash": "451731683"

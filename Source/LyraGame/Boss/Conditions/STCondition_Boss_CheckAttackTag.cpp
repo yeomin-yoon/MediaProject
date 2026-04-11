@@ -9,7 +9,6 @@ DEFINE_LOG_CATEGORY_STATIC(LogCheckAttackTag, Log, All);
 
 bool FSTCondition_Boss_CheckAttackTag::Link(FStateTreeLinker& Linker)
 {
-	// TODO: AIControllerHandle 등록
 	Linker.LinkExternalData(AIControllerHandle);
 	return true;
 }
