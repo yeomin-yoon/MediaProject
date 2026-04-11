@@ -22,27 +22,27 @@ public:
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Boss|Combat")
 	float AttackRange = 600.f;
-
+	
+	//가중치 데이터
 	UPROPERTY(EditDefaultsOnly, Category = "Boss|Combat")
 	TObjectPtr<UBossAttackWeightData> BossWeightData;
 
+	//현재 공격태그
 	UPROPERTY(BlueprintReadOnly, Category = "Boss|Combat")
 	FGameplayTag SelectedAttackTag;
-
+	
+	//가장 최근에 한 공격 태그
 	UPROPERTY(BlueprintReadOnly, Category = "Boss|Combat")
 	FGameplayTag LastAttackTag;
 
 protected:
 	virtual void BeginPlay() override;
 	virtual void Tick(float DeltaSeconds) override;
-
+	
+	//보스 AbilitySet
 	UPROPERTY(EditDefaultsOnly, Category = "Boss|Abilities")
 	TObjectPtr<ULyraAbilitySet> BossAbilitySet;
-
-public:
-	UPROPERTY(EditDefaultsOnly, Category = "Boss|Debug")
-	TSubclassOf<UGameplayAbility> TestAbilityClass;
-
-	UFUNCTION()
-	void Test();
+	
+	
+	
 };

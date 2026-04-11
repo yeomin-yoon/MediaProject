@@ -33,8 +33,8 @@ public:
 
 	void RegisterTarget(AActor* NewTarget);
 	void UpdateAggro(AActor* DamageDealer, float Damage);
-	AActor* GetHighestAggroTarget() const;
-	AActor* GetNearestTarget() const;
+	AActor* GetHighestAggroTarget() const; //멀티시 데미지를 가장높게 입힌 타겟정보
+	AActor* GetNearestTarget() const;// 가장 가까운 타겟 정보
 
 protected:
 	virtual void OnPossess(APawn* InPawn) override;
@@ -49,5 +49,5 @@ private:
 	UPROPERTY()
 	FOnLyraTeamIndexChangedDelegate OnTeamChangedDelegate;
 
-	FGenericTeamId MyTeamID = FGenericTeamId(2);
+	FGenericTeamId MyTeamID = FGenericTeamId(2); //플레이어가 팀 1 
 };

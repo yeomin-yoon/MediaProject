@@ -27,6 +27,7 @@ void ABossCharacterBase::BeginPlay()
 		return;
 	}
 
+	//ASC에 등록
 	BossAbilitySet->GiveToAbilitySystem(BossASC, nullptr);
 }
 
@@ -40,19 +41,6 @@ void ABossCharacterBase::Tick(float DeltaSeconds)
 		return;
 	}
 
-	if (PC->WasInputKeyJustPressed(EKeys::One))
-	{
-		Test();
-	}
+	
 }
 
-void ABossCharacterBase::Test()
-{
-	UAbilitySystemComponent* ASC = GetAbilitySystemComponent();
-	if (!ASC || !TestAbilityClass)
-	{
-		return;
-	}
-
-	ASC->TryActivateAbilityByClass(TestAbilityClass);
-}

@@ -38,7 +38,7 @@ AActor* ABossCharacterBaseAiController::GetHighestAggroTarget() const
 	return nullptr;
 }
 
-AActor* ABossCharacterBaseAiController::GetNearestTarget() const
+AActor* ABossCharacterBaseAiController::GetNearestTarget() const //임시로 firstplayer정보 가져오기
 {
 	if (!GetWorld())
 	{
