@@ -37,7 +37,7 @@ EStateTreeRunStatus FSTTask_Boss_SelectAttack::EnterState(FStateTreeExecutionCon
 		return EStateTreeRunStatus::Failed;
 	}
 
-	// 타겟이 없거나 후보가 없으면 기본공격으로 폴백
+
 	auto Fallback = [&]()
 	{
 		SourceBase->SelectedAttackTag = FGameplayTag::RequestGameplayTag(FName("Boss.Behavior.MoveTo"));

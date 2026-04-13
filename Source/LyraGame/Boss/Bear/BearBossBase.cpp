@@ -56,6 +56,8 @@ void ABearBossBase::ChargeStart()
 
 void ABearBossBase::ChargeEnd()
 {
-	bIsCharge=false;
+	bIsCharge = false;
+	GetCharacterMovement()->GroundFriction = 8.f;
+	GetCharacterMovement()->BrakingDecelerationWalking = 2048.f;
 	GetCharacterMovement()->StopMovementImmediately();
 }

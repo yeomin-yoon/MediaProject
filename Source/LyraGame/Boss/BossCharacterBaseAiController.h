@@ -35,6 +35,7 @@ public:
 	void UpdateAggro(AActor* DamageDealer, float Damage);
 	AActor* GetHighestAggroTarget() const; //멀티시 데미지를 가장높게 입힌 타겟정보
 	AActor* GetNearestTarget() const;// 가장 가까운 타겟 정보
+	UStateTreeAIComponent* GetStateTreeComp() const { return StateTreeComp; }
 
 protected:
 	virtual void OnPossess(APawn* InPawn) override;

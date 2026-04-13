@@ -12,6 +12,8 @@ USTRUCT()
 struct FSTTask_Boss_MoveToRangeInstanceData
 {
 	GENERATED_BODY()
+
+	float ElapsedTime = 0.f;
 };
 
 USTRUCT(meta = (DisplayName = "Boss Move To Range"))

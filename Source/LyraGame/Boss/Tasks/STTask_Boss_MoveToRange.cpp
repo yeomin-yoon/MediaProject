@@ -4,6 +4,7 @@
 #include "AIController.h"
 #include "Boss/BossCharacterBaseAiController.h"
 #include "Boss/BossCharacterBase.h"
+#include "GameplayStateTreeModule/Public/Components/StateTreeAIComponent.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogMoveToRange, Log, All);
 
@@ -71,6 +72,28 @@ EStateTreeRunStatus FSTTask_Boss_MoveToRange::Tick(FStateTreeExecutionContext& C
 	{
 		UE_LOG(LogMoveToRange, Warning, TEXT("[MoveToRange] Tick: BossController 또는 Pawn nullptr → Failed"));
 		return EStateTreeRunStatus::Failed;
+	}
+
+	FInstanceDataType& Data = Context.GetInstanceData(*this);
+	Data.ElapsedTime += DeltaTime;
+
+	if (Data.ElapsedTime >= 5.f)
+	{
+		UE_LOG(LogMoveToRange, Warning, TEXT("[MoveToRange] Tick: 5초 타임아웃 → 다음 프레임에 Charge 이벤트 전송"));
+		Data.ElapsedTime = 0.f;
+		UStateTreeAIComponent* STComp = BossController->GetStateTreeComp();
+		UE_LOG(LogMoveToRange, Warning, TEXT("[MoveToRange] STComp=%s"), STComp ? TEXT("유효") : TEXT("nullptr"));
+		BossController->GetWorld()->GetTimerManager().SetTimerForNextTick([STComp]()
+		{
+			UE_LOG(LogMoveToRange, Warning, TEXT("[MoveToRange] 람다 실행됨, STComp=%s"), STComp ? TEXT("유효") : TEXT("nullptr"));
+			if (STComp)
+			{
+				STComp->SendStateTreeEvent(
+					FStateTreeEvent(FGameplayTag::RequestGameplayTag("Boss.Event.ChargeTimeout")));
+				UE_LOG(LogMoveToRange, Warning, TEXT("[MoveToRange] SendStateTreeEvent 호출 완료"));
+			}
+		});
+		return EStateTreeRunStatus::Running;
 	}
 
 	AActor* Target = BossController->GetNearestTarget();
