@@ -2,8 +2,10 @@
 
 
 #include "InventoryTileUI.h"
-
 #include "InventoryDragDrop.h"
+#include "Components/Image.h"
+#include "Inventory/InventoryFragment_QuickBarIcon.h"
+#include "Inventory/LyraInventoryItemInstance.h"
 
 FReply UInventoryTileUI::NativeOnMouseButtonDown(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent)
 {
@@ -19,15 +21,21 @@ void UInventoryTileUI::NativeOnDragDetected(const FGeometry& InGeometry, const F
 	UDragDropOperation*& OutOperation)
 {
 	UInventoryDragDrop* DragOp = NewObject<UInventoryDragDrop>();
-
-	// DragOp->ItemInstance = ItemInstance;
-	// DragOp->SourceSlotIndex = SlotIndex;
-
-	// 👇 마우스 따라다니는 UI
+	
+	DragOp->DraggedWidget = this;
+	
 	UInventoryTileUI* DragVisual = CreateWidget<UInventoryTileUI>(GetWorld(), GetClass());
-	// DragVisual->SetItem(ItemInstance);
-
+	DragVisual->SetItemInstance(this->ItemInstance);
 	DragOp->DefaultDragVisual = DragVisual;
 
 	OutOperation = DragOp;
+}
+
+void UInventoryTileUI::SetItemInstance(ULyraInventoryItemInstance* NewItem)
+{
+	ItemInstance = NewItem;
+
+	const auto* Fragment = ItemInstance->FindFragmentByClass<UInventoryFragment_QuickBarIcon>();
+	
+	TileIMG->SetBrush(Fragment->Brush);
 }
