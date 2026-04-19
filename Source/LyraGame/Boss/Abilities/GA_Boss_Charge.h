@@ -33,6 +33,8 @@ protected:
 	
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Boss|Combat")
 	float ChargeSpd=1300.f;
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Boss|Combat")
+	float ChargeSecond=6.0f;
 	FTimerHandle TimerHandle;
 
 private:

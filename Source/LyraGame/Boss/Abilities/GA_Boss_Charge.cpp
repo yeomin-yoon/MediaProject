@@ -2,6 +2,7 @@
 
 #include "AbilitySystemComponent.h"
 #include "AbilitySystemGlobals.h"
+#include "GA_BossStuan.h"
 #include "Boss/BossCharacterBaseAiController.h"
 #include "Boss/Bear/BearBossBase.h"
 #include "GameFramework/CharacterMovementComponent.h"
@@ -52,17 +53,20 @@ void UGA_Boss_Charge::ActivateAbility(const FGameplayAbilitySpecHandle Handle,
 		return;
 	}
 	FVector Dir = (TargetActor->GetActorLocation() - BossCharacter->GetActorLocation()).GetSafeNormal();
+	FRotator LookRot = Dir.Rotation();
+	BossCharacter->SetActorRotation(LookRot);
 	BossCharacter->bIsCharge = true;
 	BossCharacter->GetCharacterMovement()->GroundFriction = 0.f;
 	BossCharacter->GetCharacterMovement()->BrakingDecelerationWalking = 0.f;
 	BossCharacter->LaunchCharacter(Dir * ChargeSpd, true, true);
-	//지정된 시간동안만 유지하기 OR 부딫히면 종료
+	
+	
 	
 	GetWorld()->GetTimerManager().SetTimer(TimerHandle,[this,Handle,ActorInfo,ActivationInfo,BossCharacter]()
 	{
 		BossCharacter->ChargeEnd();
 		EndAbility(Handle,ActorInfo,ActivationInfo,true,false);
-	},6.0f,false);
+	},ChargeSecond,false);
 	BossCharacter->OnActorHit.AddDynamic(this,&UGA_Boss_Charge::OnChargeHit);
 	
 	
@@ -70,17 +74,52 @@ void UGA_Boss_Charge::ActivateAbility(const FGameplayAbilitySpecHandle Handle,
 
 void UGA_Boss_Charge::OnChargeHit(AActor* SelfActor, AActor* OtherActor, FVector NormalImpulse, const FHitResult& Hit)
 {
-	UE_LOG(LogTemp, Warning, TEXT("[GA_Charge] OnChargeHit: %s"), *GetNameSafe(OtherActor));
-	if (UAbilitySystemComponent* ASC = UAbilitySystemGlobals::GetAbilitySystemComponentFromActor(OtherActor))
+	UE_LOG(LogTemp, Warning, TEXT("[Stun] OnChargeHit 진입 - OtherActor: %s"), *GetNameSafe(OtherActor));
+
+	UAbilitySystemComponent* OtherASC = UAbilitySystemGlobals::GetAbilitySystemComponentFromActor(OtherActor);
+	if (OtherASC)
 	{
-		if (ASC->HasMatchingGameplayTag(FGameplayTag::RequestGameplayTag("Character.Player")))
+		FGameplayTagContainer OwnedTags;
+		OtherASC->GetOwnedGameplayTags(OwnedTags);
+		UE_LOG(LogTemp, Warning, TEXT("[Stun] OtherActor ASC 발견 - 보유 태그: %s"), *OwnedTags.ToString());
+
+		if (OtherASC->HasMatchingGameplayTag(FGameplayTag::RequestGameplayTag("Character.Player")))
 		{
-			UE_LOG(LogTemp, Warning, TEXT("[GA_Charge] 플레이어 히트 → EndAbility"));
+			UE_LOG(LogTemp, Warning, TEXT("[Stun] 플레이어 히트"));
 			EndAbility(CacheHandle,CacheActorInfo,CacheActivationInfo,true,false);
 		}
+		else if(OtherASC->HasMatchingGameplayTag(FGameplayTag::RequestGameplayTag("Actor.Wall")))
+		{
+			UE_LOG(LogTemp, Warning, TEXT("[Stun] 벽 히트 → 스턴 발동 시도"));
+			UAbilitySystemComponent* BossASC = UAbilitySystemGlobals::GetAbilitySystemComponentFromActor(SelfActor);
+			EndAbility(CacheHandle,CacheActorInfo,CacheActivationInfo,true,false);
+
+			// 디버그: EndAbility 후 보스 ASC 상태 확인
+			FGameplayTagContainer BossTags;
+			BossASC->GetOwnedGameplayTags(BossTags);
+			UE_LOG(LogTemp, Warning, TEXT("[Stun] EndAbility 후 보스 보유 태그: %s"), *BossTags.ToString());
+
+			// 디버그: Grant된 GA 목록 확인
+			for (const FGameplayAbilitySpec& Spec : BossASC->GetActivatableAbilities())
+			{
+				UE_LOG(LogTemp, Warning, TEXT("[Stun] Grant된 GA: %s | AbilityTags: %s"),
+					*GetNameSafe(Spec.Ability), *Spec.Ability->AbilityTags.ToString());
+			}
+
+			FGameplayTagContainer StunTag;
+			StunTag.AddTag(FGameplayTag::RequestGameplayTag("Boss.Action.Stun"));
+			bool bSuccess = BossASC->TryActivateAbilitiesByTag(StunTag);
+			UE_LOG(LogTemp, Warning, TEXT("[Stun] TryActivateAbilitiesByTag 결과: %s"), bSuccess ? TEXT("성공") : TEXT("실패"));
+		}
+		else
+		{
+			UE_LOG(LogTemp, Warning, TEXT("[Stun] ASC 있지만 Player/Wall 태그 없음 → 무시"));
+		}
 	}
-	
-	
+	else
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[Stun] OtherActor에 ASC 없음 → 무시 (Actor: %s)"), *GetNameSafe(OtherActor));
+	}
 }
 
 void UGA_Boss_Charge::EndAbility(const FGameplayAbilitySpecHandle Handle,

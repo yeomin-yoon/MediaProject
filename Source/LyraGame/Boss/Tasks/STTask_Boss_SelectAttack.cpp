@@ -84,7 +84,7 @@ EStateTreeRunStatus FSTTask_Boss_SelectAttack::EnterState(FStateTreeExecutionCon
 	for (const auto& C : Candidates) TotalWeight += C.Value;
 
 	const float RandomNum = FMath::FRandRange(0.f, TotalWeight);
-	const FBossAttackEntry* SelectedEntry = Candidates.Last().Key; // 부동소수점 오차 대비 기본값
+	const FBossAttackEntry* SelectedEntry = Candidates.Last().Key; 
 
 	float Accumulate = 0.f;
 	for (const auto& C : Candidates)
