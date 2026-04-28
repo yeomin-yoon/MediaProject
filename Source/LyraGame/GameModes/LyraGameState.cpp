@@ -6,6 +6,7 @@
 #include "Async/TaskGraphInterfaces.h"
 #include "GameFramework/GameplayMessageSubsystem.h"
 #include "GameModes/LyraExperienceManagerComponent.h"
+#include "Lobby/LyraLobbyStateComponent.h"
 #include "Messages/LyraVerbMessage.h"
 #include "Player/LyraPlayerState.h"
 #include "LyraLogChannels.h"
@@ -30,6 +31,7 @@ ALyraGameState::ALyraGameState(const FObjectInitializer& ObjectInitializer)
 	AbilitySystemComponent->SetReplicationMode(EGameplayEffectReplicationMode::Mixed);
 
 	ExperienceManagerComponent = CreateDefaultSubobject<ULyraExperienceManagerComponent>(TEXT("ExperienceManagerComponent"));
+	LobbyStateComponent = CreateDefaultSubobject<ULyraLobbyStateComponent>(TEXT("LobbyStateComponent"));
 
 	ServerFPS = 0.0f;
 }

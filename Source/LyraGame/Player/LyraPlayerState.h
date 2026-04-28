@@ -18,6 +18,7 @@ class FName;
 class UAbilitySystemComponent;
 class ULyraAbilitySystemComponent;
 class ULyraExperienceDefinition;
+class ULyraLobbyPlayerStateComponent;
 class ULyraPawnData;
 class UObject;
 struct FFrame;
@@ -59,6 +60,9 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Lyra|PlayerState")
 	ULyraAbilitySystemComponent* GetLyraAbilitySystemComponent() const { return AbilitySystemComponent; }
 	virtual UAbilitySystemComponent* GetAbilitySystemComponent() const override;
+
+	UFUNCTION(BlueprintCallable, Category = "Lyra|Lobby")
+	ULyraLobbyPlayerStateComponent* GetLobbyPlayerStateComponent() const { return LobbyPlayerStateComponent; }
 
 	template <class T>
 	const T* GetPawnData() const { return Cast<T>(PawnData); }
@@ -149,6 +153,9 @@ private:
 	// The ability system component sub-object used by player characters.
 	UPROPERTY(VisibleAnywhere, Category = "Lyra|PlayerState")
 	TObjectPtr<ULyraAbilitySystemComponent> AbilitySystemComponent;
+
+	UPROPERTY(VisibleAnywhere, Category = "Lyra|Lobby")
+	TObjectPtr<ULyraLobbyPlayerStateComponent> LobbyPlayerStateComponent;
 
 	// Health attribute set used by this actor.
 	UPROPERTY()
