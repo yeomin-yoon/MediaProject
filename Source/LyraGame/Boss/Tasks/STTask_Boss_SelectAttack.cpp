@@ -3,6 +3,8 @@
 #include "StateTreeLinker.h"
 #include "Boss/BossCharacterBaseAiController.h"
 #include "Boss/BossCharacterBase.h"
+#include "AbilitySystemBlueprintLibrary.h"
+#include "AbilitySystemComponent.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogSelectAttack, Log, All);
 
@@ -43,6 +45,17 @@ EStateTreeRunStatus FSTTask_Boss_SelectAttack::EnterState(FStateTreeExecutionCon
 		SourceBase->SelectedAttackTag = FGameplayTag::RequestGameplayTag(FName("Boss.Behavior.MoveTo"));
 		UE_LOG(LogSelectAttack, Warning, TEXT("SelectAttack: 폴백 → MoveTo(근거리 이동)"));
 	};
+
+	// 스턴 중에는 공격 선택을 하지 않고 MoveTo 폴백으로 보내, GA가 활성화되지 않도록 한다
+	if (UAbilitySystemComponent* BossASC = UAbilitySystemBlueprintLibrary::GetAbilitySystemComponent(SourceBase))
+	{
+		if (BossASC->HasMatchingGameplayTag(FGameplayTag::RequestGameplayTag(FName("Boss.State.Stunned"))))
+		{
+			UE_LOG(LogSelectAttack, Warning, TEXT("SelectAttack: 스턴 상태 → 공격 선택 보류, MoveTo 폴백"));
+			Fallback();
+			return EStateTreeRunStatus::Succeeded;
+		}
+	}
 
 	AActor* Target = SourceController->GetNearestTarget();
 	if (!Target)

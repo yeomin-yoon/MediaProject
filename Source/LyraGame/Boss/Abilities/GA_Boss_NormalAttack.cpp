@@ -3,9 +3,9 @@
 
 UGA_Boss_NormalAttack::UGA_Boss_NormalAttack()
 {
-	
-	
-	InstancingPolicy = EGameplayAbilityInstancingPolicy::InstancedPerActor; 
+	InstancingPolicy = EGameplayAbilityInstancingPolicy::InstancedPerActor;
+	ActivationBlockedTags.AddTag(FGameplayTag::RequestGameplayTag("Boss.State.Stunned"));
+	ActivationBlockedTags.AddTag(FGameplayTag::RequestGameplayTag("Boss.State.Dying"));
 }
 
 void UGA_Boss_NormalAttack::InitializeForCahe(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo, const FGameplayAbilityActivationInfo ActivationInfo)

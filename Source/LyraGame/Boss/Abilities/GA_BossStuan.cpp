@@ -52,6 +52,14 @@ void UGA_BossStuan::EndAbility(const FGameplayAbilitySpecHandle Handle, const FG
 	AActor* RawActor = GetAvatarActorFromActorInfo();
 	ABearBossBase* Bear = Cast<ABearBossBase>(RawActor);
 	Bear->GetCharacterMovement()->SetMovementMode(MOVE_Walking);
+	{
+		UCharacterMovementComponent* MoveComp = Bear->GetCharacterMovement();
+		UE_LOG(LogTemp, Warning,
+			TEXT("[Stun] EndAbility - MOVE_Walking 세팅 후 MovementMode=%d IsFalling=%d IsMovingOnGround=%d"),
+			(int32)MoveComp->MovementMode.GetValue(),
+			MoveComp->IsFalling(),
+			MoveComp->IsMovingOnGround());
+	}
 	Super::EndAbility(Handle, ActorInfo, ActivationInfo, bReplicateEndAbility, bWasCancelled);
 }
 

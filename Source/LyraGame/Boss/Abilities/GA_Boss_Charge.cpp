@@ -10,9 +10,11 @@
 UGA_Boss_Charge::UGA_Boss_Charge()
 {
 	InstancingPolicy = EGameplayAbilityInstancingPolicy::InstancedPerActor;
-	AbilityTags.AddTag(FGameplayTag::RequestGameplayTag("Boss.Attack.Charge")); 
+	AbilityTags.AddTag(FGameplayTag::RequestGameplayTag("Boss.Attack.Charge"));
 	ActivationOwnedTags.AddTag(FGameplayTag::RequestGameplayTag("Boss.Attack.Charge")); // 활성화시 위 태그를 가짐
 	ActivationBlockedTags.AddTag(FGameplayTag::RequestGameplayTag("Boss.Attack.Charge"));// 이 태그가 활성화 되잇는중에는 실행이 안되게
+	ActivationBlockedTags.AddTag(FGameplayTag::RequestGameplayTag("Boss.State.Stunned"));// 스턴 중 발동 차단
+	ActivationBlockedTags.AddTag(FGameplayTag::RequestGameplayTag("Boss.State.Dying"));// 죽음 중 발동 차단
 	
 }
 

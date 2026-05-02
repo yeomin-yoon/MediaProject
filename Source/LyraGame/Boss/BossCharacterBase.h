@@ -39,11 +39,12 @@ public:
 protected:
 	virtual void BeginPlay() override;
 	virtual void Tick(float DeltaSeconds) override;
-	
+
 	//보스 AbilitySet
 	UPROPERTY(EditDefaultsOnly, Category = "Boss|Abilities")
 	TObjectPtr<ULyraAbilitySet> BossAbilitySet;
-	
-	
-	
+
+	// 디버그: 보스를 즉사시킴. Lyra 기본 죽음 파이프라인(OnOutOfHealth → GameplayEvent.Death → GA_Boss_Death) 발동.
+	UFUNCTION(BlueprintCallable, Category = "Boss|Debug")
+	void DebugKill();
 };
