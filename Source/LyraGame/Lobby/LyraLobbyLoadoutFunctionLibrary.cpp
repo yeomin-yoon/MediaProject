@@ -2,12 +2,38 @@
 
 #include "Lobby/LyraLobbyLoadoutFunctionLibrary.h"
 
+#include "CommonSessionSubsystem.h"
+#include "Engine/Engine.h"
+#include "Engine/GameInstance.h"
+#include "Engine/World.h"
+#include "GameModes/LyraUserFacingExperienceDefinition.h"
 #include "GameFramework/PlayerController.h"
 #include "GameFramework/PlayerState.h"
 #include "Kismet/GameplayStatics.h"
+#include "Lobby/LyraLobbyLocalLoadoutSubsystem.h"
 #include "Lobby/LyraLobbyPlayerStateComponent.h"
+#include "Player/LyraPlayerController.h"
 
 #include UE_INLINE_GENERATED_CPP_BY_NAME(LyraLobbyLoadoutFunctionLibrary)
+
+namespace LyraLobbyLoadoutFunctionLibrary_Private
+{
+	UCommonSession_HostSessionRequest* CreateRequestForExperience(const UObject* WorldContextObject, const ULyraUserFacingExperienceDefinition* UserFacingExperience, ECommonSessionOnlineMode OnlineMode)
+	{
+		if (!UserFacingExperience)
+		{
+			return nullptr;
+		}
+
+		UCommonSession_HostSessionRequest* Request = UserFacingExperience->CreateHostingRequest(WorldContextObject);
+		if (Request)
+		{
+			Request->OnlineMode = OnlineMode;
+		}
+
+		return Request;
+	}
+}
 
 FPrimaryAssetId ULyraLobbyLoadoutFunctionLibrary::MakeLobbyPrimaryAssetId(FName PrimaryAssetType, FName PrimaryAssetName)
 {
@@ -35,9 +61,48 @@ bool ULyraLobbyLoadoutFunctionLibrary::GetLocalLobbyLoadout(const UObject* World
 
 bool ULyraLobbyLoadoutFunctionLibrary::SubmitLocalLobbyLoadout(const UObject* WorldContextObject, const FLyraLobbyPlayerLoadout& Loadout, int32 LocalPlayerIndex)
 {
+	SaveLocalLobbyLoadoutForTravel(WorldContextObject, Loadout, LocalPlayerIndex);
+
 	if (ULyraLobbyPlayerStateComponent* LobbyPlayer = GetLocalLobbyPlayerStateComponent(WorldContextObject, LocalPlayerIndex))
 	{
 		LobbyPlayer->SubmitLobbyLoadout(Loadout);
+		return true;
+	}
+
+	return false;
+}
+
+bool ULyraLobbyLoadoutFunctionLibrary::SaveLocalLobbyLoadoutForTravel(const UObject* WorldContextObject, const FLyraLobbyPlayerLoadout& Loadout, int32 LocalPlayerIndex)
+{
+	UGameInstance* GameInstance = UGameplayStatics::GetGameInstance(WorldContextObject);
+	ULyraLobbyLocalLoadoutSubsystem* LocalLoadoutSubsystem = GameInstance ? GameInstance->GetSubsystem<ULyraLobbyLocalLoadoutSubsystem>() : nullptr;
+	if (!LocalLoadoutSubsystem)
+	{
+		return false;
+	}
+
+	LocalLoadoutSubsystem->SaveLocalLoadout(LocalPlayerIndex, Loadout);
+	return true;
+}
+
+bool ULyraLobbyLoadoutFunctionLibrary::PushSavedLocalLobbyLoadoutToServer(const UObject* WorldContextObject, int32 LocalPlayerIndex)
+{
+	UGameInstance* GameInstance = UGameplayStatics::GetGameInstance(WorldContextObject);
+	ULyraLobbyLocalLoadoutSubsystem* LocalLoadoutSubsystem = GameInstance ? GameInstance->GetSubsystem<ULyraLobbyLocalLoadoutSubsystem>() : nullptr;
+	if (!LocalLoadoutSubsystem)
+	{
+		return false;
+	}
+
+	FLyraLobbyPlayerLoadout SavedLoadout;
+	if (!LocalLoadoutSubsystem->GetLocalLoadout(LocalPlayerIndex, SavedLoadout))
+	{
+		return false;
+	}
+
+	if (ULyraLobbyPlayerStateComponent* LobbyPlayer = GetLocalLobbyPlayerStateComponent(WorldContextObject, LocalPlayerIndex))
+	{
+		LobbyPlayer->SubmitLobbyLoadout(SavedLoadout);
 		return true;
 	}
 
@@ -53,6 +118,63 @@ bool ULyraLobbyLoadoutFunctionLibrary::SetLocalLobbyReady(const UObject* WorldCo
 	}
 
 	return false;
+}
+
+bool ULyraLobbyLoadoutFunctionLibrary::HostLocalLobbyExperience(const UObject* WorldContextObject, const ULyraUserFacingExperienceDefinition* UserFacingExperience, int32 LocalPlayerIndex, ECommonSessionOnlineMode OnlineMode)
+{
+	APlayerController* HostingPlayer = UGameplayStatics::GetPlayerController(WorldContextObject, LocalPlayerIndex);
+	UGameInstance* GameInstance = UGameplayStatics::GetGameInstance(WorldContextObject);
+	UCommonSessionSubsystem* SessionSubsystem = GameInstance ? GameInstance->GetSubsystem<UCommonSessionSubsystem>() : nullptr;
+	UCommonSession_HostSessionRequest* Request = LyraLobbyLoadoutFunctionLibrary_Private::CreateRequestForExperience(WorldContextObject, UserFacingExperience, OnlineMode);
+	if (!HostingPlayer || !SessionSubsystem || !Request)
+	{
+		return false;
+	}
+
+	FText Error;
+	if (!Request->ValidateAndLogErrors(Error))
+	{
+		return false;
+	}
+
+	SessionSubsystem->HostSession(HostingPlayer, Request);
+	return true;
+}
+
+bool ULyraLobbyLoadoutFunctionLibrary::QuickPlayLocalLobbyExperience(const UObject* WorldContextObject, const ULyraUserFacingExperienceDefinition* UserFacingExperience, int32 LocalPlayerIndex, ECommonSessionOnlineMode OnlineMode)
+{
+	if (!UserFacingExperience)
+	{
+		return false;
+	}
+
+	APlayerController* JoiningOrHostingPlayer = UGameplayStatics::GetPlayerController(WorldContextObject, LocalPlayerIndex);
+	UWorld* World = GEngine ? GEngine->GetWorldFromContextObject(WorldContextObject, EGetWorldErrorMode::ReturnNull) : nullptr;
+	if (World && World->GetNetMode() != NM_Standalone)
+	{
+		if (ALyraPlayerController* LyraPlayerController = Cast<ALyraPlayerController>(JoiningOrHostingPlayer))
+		{
+			LyraPlayerController->RequestConnectedLobbyReadyToTravelToExperience(UserFacingExperience);
+			return true;
+		}
+	}
+
+	UGameInstance* GameInstance = UGameplayStatics::GetGameInstance(WorldContextObject);
+	UCommonSessionSubsystem* SessionSubsystem = GameInstance ? GameInstance->GetSubsystem<UCommonSessionSubsystem>() : nullptr;
+	UCommonSession_HostSessionRequest* Request = LyraLobbyLoadoutFunctionLibrary_Private::CreateRequestForExperience(WorldContextObject, UserFacingExperience, OnlineMode);
+	if (!JoiningOrHostingPlayer || !SessionSubsystem || !Request)
+	{
+		return false;
+	}
+
+	FText Error;
+	if (!Request->ValidateAndLogErrors(Error))
+	{
+		return false;
+	}
+
+	SessionSubsystem->QuickPlaySession(JoiningOrHostingPlayer, Request);
+	return true;
 }
 
 FLyraLobbyPlayerLoadout ULyraLobbyLoadoutFunctionLibrary::SetCharacterPreset(FLyraLobbyPlayerLoadout Loadout, FPrimaryAssetId CharacterPresetId)

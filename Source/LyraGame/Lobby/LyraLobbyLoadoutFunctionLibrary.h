@@ -2,12 +2,14 @@
 
 #pragma once
 
+#include "CommonSessionSubsystem.h"
 #include "Kismet/BlueprintFunctionLibrary.h"
 #include "Lobby/LyraLobbyTypes.h"
 
 #include "LyraLobbyLoadoutFunctionLibrary.generated.h"
 
 class ULyraLobbyPlayerStateComponent;
+class ULyraUserFacingExperienceDefinition;
 class UObject;
 
 UCLASS()
@@ -29,7 +31,19 @@ public:
 	static bool SubmitLocalLobbyLoadout(const UObject* WorldContextObject, const FLyraLobbyPlayerLoadout& Loadout, int32 LocalPlayerIndex);
 
 	UFUNCTION(BlueprintCallable, Category = "Lyra|Lobby", meta = (WorldContext = "WorldContextObject"))
+	static bool SaveLocalLobbyLoadoutForTravel(const UObject* WorldContextObject, const FLyraLobbyPlayerLoadout& Loadout, int32 LocalPlayerIndex);
+
+	UFUNCTION(BlueprintCallable, Category = "Lyra|Lobby", meta = (WorldContext = "WorldContextObject"))
+	static bool PushSavedLocalLobbyLoadoutToServer(const UObject* WorldContextObject, int32 LocalPlayerIndex);
+
+	UFUNCTION(BlueprintCallable, Category = "Lyra|Lobby", meta = (WorldContext = "WorldContextObject"))
 	static bool SetLocalLobbyReady(const UObject* WorldContextObject, bool bReady, int32 LocalPlayerIndex);
+
+	UFUNCTION(BlueprintCallable, Category = "Lyra|Lobby", meta = (WorldContext = "WorldContextObject"))
+	static bool HostLocalLobbyExperience(const UObject* WorldContextObject, const ULyraUserFacingExperienceDefinition* UserFacingExperience, int32 LocalPlayerIndex, ECommonSessionOnlineMode OnlineMode = ECommonSessionOnlineMode::LAN);
+
+	UFUNCTION(BlueprintCallable, Category = "Lyra|Lobby", meta = (WorldContext = "WorldContextObject"))
+	static bool QuickPlayLocalLobbyExperience(const UObject* WorldContextObject, const ULyraUserFacingExperienceDefinition* UserFacingExperience, int32 LocalPlayerIndex, ECommonSessionOnlineMode OnlineMode = ECommonSessionOnlineMode::LAN);
 
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Lyra|Lobby")
 	static FLyraLobbyPlayerLoadout SetCharacterPreset(FLyraLobbyPlayerLoadout Loadout, FPrimaryAssetId CharacterPresetId);
