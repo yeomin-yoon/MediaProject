@@ -11,6 +11,13 @@
 #include "Inventory/LyraInventoryItemInstance.h"
 #include "Inventory/LyraInventoryManagerComponent.h"
 
+void UInventoryScreenUI::NativeOnDeactivated()
+{
+	Super::NativeOnDeactivated();
+	
+	DeactivateWidget();
+}
+
 void UInventoryScreenUI::NativeConstruct()
 {
 	Super::NativeConstruct();
@@ -70,30 +77,53 @@ void UInventoryScreenUI::HandleDropToSlot(UBorder* TargetSlot, UInventoryTileUI*
 {
 	if (!TargetSlot || !DraggedWidget) return;
 
-	// Ability 호출
+	ULyraInventoryItemInstance* DragItem = DraggedWidget->ItemInstance;
+	if (!DragItem) return;
+
+	UInventoryTileUI* ExistingWidget = nullptr;
+
+	if (TargetSlot->GetChildrenCount() > 0)
+	{
+		ExistingWidget = Cast<UInventoryTileUI>(TargetSlot->GetChildAt(0));
+	}
+
 	APawn* Pawn = GetOwningPlayerPawn();
 	if (!Pawn) return;
 
 	FGameplayEventData EventData;
-	EventData.OptionalObject = DraggedWidget->ItemInstance;
+	EventData.OptionalObject = DragItem;
 
-	UAbilitySystemBlueprintLibrary::SendGameplayEventToActor(
-		Pawn,
-		FGameplayTag::RequestGameplayTag("Event.EquipItem"),
-		EventData
-	);
-	
-	UInventoryTileUI* NewWidget = CreateWidget<UInventoryTileUI>(
-		GetWorld(),
-		DraggedWidget->GetClass()
-	);
+	// ----------------------------------
+	// 1. Swap
+	// ----------------------------------
+	if (ExistingWidget && ExistingWidget->ItemInstance)
+	{
+		ULyraInventoryItemInstance* Temp = ExistingWidget->ItemInstance;
 
-	// 데이터 복사
-	NewWidget->ItemInstance = DraggedWidget->ItemInstance;
+		ExistingWidget->SetItemInstance(DragItem);
+		DraggedWidget->SetItemInstance(Temp);
+	}
+	else
+	{
+		// ----------------------------------
+		// 2. Move
+		// ----------------------------------
+		DraggedWidget->RemoveItem();
 
-	// 핵심 함수 호출
-	NewWidget->SetItemInstance(DraggedWidget->ItemInstance);
+		UInventoryTileUI* NewWidget = CreateWidget<UInventoryTileUI>(
+			GetWorld(),
+			DraggedWidget->GetClass()
+		);
 
-	TargetSlot->ClearChildren();
-	TargetSlot->AddChild(NewWidget);
+		NewWidget->SetItemInstance(DragItem);
+
+		TargetSlot->ClearChildren();
+		TargetSlot->AddChild(NewWidget);
+		
+		UAbilitySystemBlueprintLibrary::SendGameplayEventToActor(
+			Pawn,
+			FGameplayTag::RequestGameplayTag("Event.EquipItem"),
+			EventData
+		);
+	}
 }

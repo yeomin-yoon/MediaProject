@@ -1,29 +1,34 @@
-﻿// Fill out your copyright notice in the Description page of Project Settings.
-
-#pragma once
+﻿#pragma once
 
 #include "CoreMinimal.h"
 #include "Blueprint/UserWidget.h"
+#include "Blueprint/IUserObjectListEntry.h"
 #include "InventoryTileUI.generated.h"
 
 class UImage;
 class ULyraInventoryItemInstance;
 
 UCLASS()
-class LYRAGAME_API UInventoryTileUI : public UUserWidget
+class LYRAGAME_API UInventoryTileUI : public UUserWidget, public IUserObjectListEntry
 {
 	GENERATED_BODY()
+	
+public:
+	// ListView에서 데이터 들어올 때 호출됨
+	virtual void NativeOnListItemObjectSet(UObject* ListItemObject) override;
 
 public:
 	UPROPERTY(BlueprintReadWrite, Category="Inventory")
 	TObjectPtr<ULyraInventoryItemInstance> ItemInstance = nullptr;
-	
+    
 	void SetItemInstance(ULyraInventoryItemInstance* NewItem);
+	
+	void RemoveItem();
 
 protected:
 	UPROPERTY(BlueprintReadWrite, meta = (BindWidget))
 	TObjectPtr<UImage> TileIMG;
-	
+    
 	virtual FReply NativeOnMouseButtonDown(
 		const FGeometry& InGeometry,
 		const FPointerEvent& InMouseEvent
@@ -33,5 +38,11 @@ protected:
 		const FGeometry& InGeometry,
 		const FPointerEvent& InMouseEvent,
 		UDragDropOperation*& OutOperation
+	) override;
+	
+	virtual bool NativeOnDrop(
+		const FGeometry& InGeometry,
+		const FDragDropEvent& InDragDropEvent,
+		UDragDropOperation* InOperation
 	) override;
 };

@@ -15,8 +15,10 @@ UCLASS()
 class LYRAGAME_API UInventoryScreenUI : public UCommonActivatableWidget
 {
 	GENERATED_BODY()
-
+	
 protected:
+	virtual void NativeOnDeactivated() override;
+
 	UPROPERTY(meta = (BindWidget))
 	TObjectPtr<UBorder> EquipSlotBorder1;
 

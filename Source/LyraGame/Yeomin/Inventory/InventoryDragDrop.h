@@ -18,4 +18,7 @@ class LYRAGAME_API UInventoryDragDrop : public UDragDropOperation
 public:
 	UPROPERTY()
 	TObjectPtr<UInventoryTileUI> DraggedWidget;
+
+	UPROPERTY()
+	TObjectPtr<class ULyraInventoryItemInstance> Item;
 };
