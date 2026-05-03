@@ -2,6 +2,7 @@
 
 #pragma once
 
+#include "AbilitySystemComponent.h"
 #include "Components/ActorComponent.h"
 #include "Net/Serialization/FastArraySerializer.h"
 
@@ -15,6 +16,8 @@ struct FFrame;
 struct FLyraInventoryList;
 struct FNetDeltaSerializeInfo;
 struct FReplicationFlags;
+
+DECLARE_MULTICAST_DELEGATE(FOnEquipChanged);
 
 /** A message when an item is added to the inventory */
 USTRUCT(BlueprintType)
@@ -80,6 +83,7 @@ struct FLyraInventoryList : public FFastArraySerializer
 	TArray<ULyraInventoryItemInstance*> GetAllItems() const;
 
 public:
+	void SwapEntries(ULyraInventoryItemInstance* A, ULyraInventoryItemInstance* B);
 	//~FFastArraySerializer contract
 	void PreReplicatedRemove(const TArrayView<int32> RemovedIndices, int32 FinalSize);
 	void PostReplicatedAdd(const TArrayView<int32> AddedIndices, int32 FinalSize);
@@ -148,6 +152,22 @@ public:
 
 	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category=Inventory)
 	void RemoveItemInstance(ULyraInventoryItemInstance* ItemInstance);
+	
+	UPROPERTY()
+	TMap<TObjectPtr<ULyraInventoryItemInstance>, FActiveGameplayEffectHandle> ActiveGEMap;
+	FOnEquipChanged OnEquipChanged;
+	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category=Inventory)
+	void SwapItemInstance(ULyraInventoryItemInstance* A, ULyraInventoryItemInstance* B);
+	TArray<TObjectPtr<ULyraInventoryItemInstance>> EquipSlots;
+	void EquipSwap(int32 SlotIndex, ULyraInventoryItemInstance* NewItem);
+	int32 FindItemIndex(ULyraInventoryItemInstance* Item) const;
+	ULyraInventoryItemInstance* GetItemByIndex(int32 Index) const;
+	bool IsEquipped(ULyraInventoryItemInstance* Item) const;
+	void EquipFromInventory(int32 SlotIndex, ULyraInventoryItemInstance* Item);
+	void SwapEquipSlots(int32 A, int32 B);
+	void RemoveFromEquipAndReturnToInventory(ULyraInventoryItemInstance* Item);
+	void ApplyEquipEffect(int32 SlotIndex, ULyraInventoryItemInstance* Item);
+	void RemoveEquipEffect(UAbilitySystemComponent* ASC, ULyraInventoryItemInstance* Item);
 
 	UFUNCTION(BlueprintCallable, Category=Inventory, BlueprintPure=false)
 	TArray<ULyraInventoryItemInstance*> GetAllItems() const;
@@ -162,8 +182,7 @@ public:
 	virtual bool ReplicateSubobjects(class UActorChannel* Channel, class FOutBunch* Bunch, FReplicationFlags* RepFlags) override;
 	virtual void ReadyForReplication() override;
 	//~End of UObject interface
-
-private:
+	
 	UPROPERTY(Replicated)
 	FLyraInventoryList InventoryList;
 };

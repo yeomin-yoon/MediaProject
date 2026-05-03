@@ -3,20 +3,15 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "NativeGameplayTags.h"
 #include "Blueprint/UserWidget.h"
-#include "GameFramework/GameplayMessageSubsystem.h"
 #include "InventoryGridUI.generated.h"
 
 /**
  * 
  */
 
-struct FLyraInventoryChangeMessage;
 class ULyraInventoryManagerComponent;
 class UCommonTileView;
-
-UE_DECLARE_GAMEPLAY_TAG_EXTERN(TAG_Lyra_Inventory_Message_StackChanged)
 
 UCLASS()
 class LYRAGAME_API UInventoryGridUI : public UUserWidget
@@ -25,17 +20,12 @@ class LYRAGAME_API UInventoryGridUI : public UUserWidget
 	
 public:
 	virtual void NativeConstruct() override;
-	virtual void NativeDestruct() override;
-
-private:
 	void InitInventory();
-	void OnInventoryChanged(FGameplayTag Channel, const FLyraInventoryChangeMessage& Msg);
 	
-	UPROPERTY(meta = (BindWidget))
+	UPROPERTY(meta = (BindWidget), BlueprintReadWrite)
 	TObjectPtr<UCommonTileView> TileViewWidget;
 
+private:
 	UPROPERTY()
-	TObjectPtr<ULyraInventoryManagerComponent> InventoryComp;
-	
-	FGameplayMessageListenerHandle MessageHandle;
+	TObjectPtr<ULyraInventoryManagerComponent> InventoryComp = nullptr;
 };

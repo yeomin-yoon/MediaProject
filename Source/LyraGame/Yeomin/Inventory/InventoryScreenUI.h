@@ -4,12 +4,26 @@
 #include "CommonActivatableWidget.h"
 #include "InventoryScreenUI.generated.h"
 
+class ULyraInventoryItemInstance;
+class UInventoryGridUI;
 class UGameplayAbility;
 class UAbilitySystemComponent;
 class UBorder;
 class ULyraInventoryManagerComponent;
 class UInventoryTileUI;
 class UDragDropOperation;
+
+USTRUCT()
+struct FEquipSlotRef
+{
+	GENERATED_BODY()
+
+	UPROPERTY()
+	int32 SlotIndex = INDEX_NONE;
+
+	UPROPERTY()
+	TObjectPtr<UBorder> Border = nullptr;
+};
 
 UCLASS()
 class LYRAGAME_API UInventoryScreenUI : public UCommonActivatableWidget
@@ -18,6 +32,9 @@ class LYRAGAME_API UInventoryScreenUI : public UCommonActivatableWidget
 	
 protected:
 	virtual void NativeOnDeactivated() override;
+	
+	UPROPERTY()
+	TArray<FEquipSlotRef> EquipSlots;
 
 	UPROPERTY(meta = (BindWidget))
 	TObjectPtr<UBorder> EquipSlotBorder1;
@@ -28,16 +45,23 @@ protected:
 	UPROPERTY(meta = (BindWidget))
 	TObjectPtr<UBorder> EquipSlotBorder3;
 	
+	UPROPERTY(EditDefaultsOnly, Category="UI")
+	TSubclassOf<class UInventoryTileUI> InventoryTileClass;
+	
+	UPROPERTY()
+	TArray<TObjectPtr<UInventoryTileUI>> EquipWidgets;
+	
 	UPROPERTY()
 	TObjectPtr<ULyraInventoryManagerComponent> CachedInventory;
 	
 	UPROPERTY()
 	TObjectPtr<UAbilitySystemComponent> CachedASC;
-
-	UPROPERTY(EditDefaultsOnly)
-	TSubclassOf<UGameplayAbility> GA_EquipItem;
+	
+	UPROPERTY(meta = (BindWidget))
+	TObjectPtr<UInventoryGridUI> WidgetGridUI;
 	
 	virtual void NativeConstruct() override;
+	void InitDeferred();
 
 	// 드랍 처리
 	virtual bool NativeOnDrop(
@@ -47,9 +71,6 @@ protected:
 	) override;
 
 private:
-	// 드랍 슬롯 찾기
-	UBorder* GetDropTarget(const FVector2D& ScreenPos) const;
-
-	// 드랍 처리
-	void HandleDropToSlot(UBorder* TargetSlot, UInventoryTileUI* DraggedWidget);
+	void RefreshEquipSlots();
+	void UpdateSlot(UBorder* Slot, int32 Index);
 };

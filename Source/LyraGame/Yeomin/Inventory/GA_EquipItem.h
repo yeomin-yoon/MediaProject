@@ -14,6 +14,8 @@ class LYRAGAME_API UGA_EquipItem : public ULyraGameplayAbility
 {
 	GENERATED_BODY()
 	
+	UGA_EquipItem();
+	
 protected:
 	virtual void ActivateAbility(
 		const FGameplayAbilitySpecHandle Handle,

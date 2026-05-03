@@ -2,6 +2,7 @@
 
 #pragma once
 
+#include "ActiveGameplayEffectHandle.h"
 #include "System/GameplayTagStack.h"
 #include "Templates/SubclassOf.h"
 
@@ -76,4 +77,12 @@ private:
 	// The item definition
 	UPROPERTY(Replicated)
 	TSubclassOf<ULyraInventoryItemDefinition> ItemDef;
+	
+public:
+	// 🔥 고정 랜덤 데이터 (핵심)
+	UPROPERTY()
+	float RandomValue = 0.f;
+
+	UPROPERTY()
+	int32 RandomSeed = 0;
 };

@@ -6,7 +6,18 @@
 #include "Components/Image.h"
 #include "Inventory/InventoryFragment_QuickBarIcon.h"
 #include "Inventory/LyraInventoryItemInstance.h"
-#include "Inventory/InventoryFragment_QuickBarIcon.h"
+#include "Inventory/LyraInventoryManagerComponent.h"
+
+void UInventoryTileUI::NativeConstruct()
+{
+	Super::NativeConstruct();
+	
+	APlayerController* PC = GetOwningPlayer();
+	if (PC)
+	{
+		CachedInventory = PC->FindComponentByClass<ULyraInventoryManagerComponent>();
+	}
+}
 
 FReply UInventoryTileUI::NativeOnMouseButtonDown(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent)
 {
@@ -18,22 +29,29 @@ FReply UInventoryTileUI::NativeOnMouseButtonDown(const FGeometry& InGeometry, co
 	return Super::NativeOnMouseButtonDown(InGeometry, InMouseEvent);
 }
 
-void UInventoryTileUI::NativeOnDragDetected(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent,
+void UInventoryTileUI::NativeOnDragDetected(
+	const FGeometry& InGeometry,
+	const FPointerEvent& InMouseEvent,
 	UDragDropOperation*& OutOperation)
 {
-	if (!ItemInstance) return;
-	
+	if (!ItemInstance)
+		return;
+
 	UInventoryDragDrop* DragOp = NewObject<UInventoryDragDrop>();
-	
-	DragOp->DraggedWidget = this;
+
+	// 👉 index 삭제, 무조건 pointer
 	DragOp->Item = ItemInstance;
-	
-	UInventoryTileUI* DragVisual = CreateWidget<UInventoryTileUI>(GetWorld(), GetClass());
-	DragVisual->SetItemInstance(this->ItemInstance);
+
+	UInventoryTileUI* DragVisual =
+		CreateWidget<UInventoryTileUI>(GetWorld(), GetClass());
+
+	DragVisual->SetItemInstance(ItemInstance);
+
 	DragOp->DefaultDragVisual = DragVisual;
 
 	OutOperation = DragOp;
 }
+
 
 void UInventoryTileUI::NativeOnListItemObjectSet(UObject* ListItemObject)
 {
@@ -86,27 +104,5 @@ bool UInventoryTileUI::NativeOnDrop(
 	const FDragDropEvent& InDragDropEvent,
 	UDragDropOperation* InOperation)
 {
-	UInventoryDragDrop* DragOp = Cast<UInventoryDragDrop>(InOperation);
-	if (!DragOp) return false;
-
-	UInventoryTileUI* SourceWidget = DragOp->DraggedWidget;
-	ULyraInventoryItemInstance* DragItem = DragOp->Item;
-
-	if (!SourceWidget || !DragItem || SourceWidget == this)
-		return false;
-	
-	if (ItemInstance)
-	{
-		ULyraInventoryItemInstance* Temp = ItemInstance;
-
-		SetItemInstance(DragItem);
-		SourceWidget->SetItemInstance(Temp);
-	}
-	else
-	{
-		SourceWidget->RemoveItem();
-		SetItemInstance(DragItem);
-	}
-
-	return true;
+	return false;
 }

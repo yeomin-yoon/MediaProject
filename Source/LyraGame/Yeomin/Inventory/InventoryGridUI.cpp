@@ -6,42 +6,23 @@
 #include "CommonTileView.h"
 #include "Inventory/LyraInventoryItemInstance.h"
 
-UE_DEFINE_GAMEPLAY_TAG(TAG_Lyra_Inventory_Message_StackChanged, "Lyra.Inventory.Message.StackChanged")
-
 void UInventoryGridUI::NativeConstruct()
 {
 	Super::NativeConstruct();
-	
-	UE_LOG(LogTemp, Warning, TEXT("Listener Registered"))
 
-	APlayerController* PC = GetOwningPlayer();
-	if (!PC) return;
+	InventoryComp = GetOwningPlayer()
+		? GetOwningPlayer()->FindComponentByClass<ULyraInventoryManagerComponent>()
+		: nullptr;
 
-	InventoryComp = PC->FindComponentByClass<ULyraInventoryManagerComponent>();
-	if (!InventoryComp) return;
-
-	// 1. 초기 전체 로딩
-	InitInventory();
-
-	// 2. 메시지 구독
-	UGameplayMessageSubsystem& Subsystem = UGameplayMessageSubsystem::Get(GetWorld());
-
-	MessageHandle = Subsystem.RegisterListener<FLyraInventoryChangeMessage>(
-	TAG_Lyra_Inventory_Message_StackChanged,
-	this,
-	&UInventoryGridUI::OnInventoryChanged
-);
-}
-
-void UInventoryGridUI::NativeDestruct()
-{
-	if (MessageHandle.IsValid())
-	{
-		UGameplayMessageSubsystem& Subsystem = UGameplayMessageSubsystem::Get(this);
-		Subsystem.UnregisterListener(MessageHandle);
-	}
-
-	Super::NativeDestruct();
+	// 한 프레임 뒤로 미룸
+	FTimerHandle TimerHandle;
+	GetWorld()->GetTimerManager().SetTimer(
+		TimerHandle,
+		this,
+		&UInventoryGridUI::InitInventory,
+		0.01f,
+		false
+	);
 }
 
 void UInventoryGridUI::InitInventory()
@@ -56,35 +37,12 @@ void UInventoryGridUI::InitInventory()
 	{
 		if (!Item) continue;
 
-		TileViewWidget->AddItem(Item);
-	}
-}
+		// 🔥 핵심: Equip된 아이템은 인벤토리에 표시하지 않음
+		if (InventoryComp->IsEquipped(Item))
+		{
+			continue;
+		}
 
-void UInventoryGridUI::OnInventoryChanged(
-	FGameplayTag Channel,
-	const FLyraInventoryChangeMessage& Msg)
-{
-	UE_LOG(LogTemp, Warning, TEXT("Message Received"))
-	
-	if (!TileViewWidget) return;
-
-	ULyraInventoryItemInstance* Item = Msg.Instance;
-	int32 NewCount = Msg.NewCount;
-
-	if (!Item) return;
-
-	// 제거
-	if (NewCount == 0)
-	{
-		TileViewWidget->RemoveItem(Item);
-		return;
-	}
-
-	// 추가
-	const TArray<UObject*>& Items = TileViewWidget->GetListItems();
-
-	if (!Items.Contains(Item))
-	{
 		TileViewWidget->AddItem(Item);
 	}
 }

@@ -1,9 +1,19 @@
 ﻿#include "GA_EquipItem.h"
-
 #include "GameFramework/GameplayMessageSubsystem.h"
 #include "GameplayTagContainer.h"
 #include "Inventory/LyraInventoryItemInstance.h"
 #include "Inventory/LyraInventoryManagerComponent.h"
+
+UGA_EquipItem::UGA_EquipItem()
+{
+	InstancingPolicy = EGameplayAbilityInstancingPolicy::InstancedPerExecution;
+
+	FAbilityTriggerData TriggerData;
+	TriggerData.TriggerTag = FGameplayTag::RequestGameplayTag("Event.EquipItem");
+	TriggerData.TriggerSource = EGameplayAbilityTriggerSource::GameplayEvent;
+
+	AbilityTriggers.Add(TriggerData);
+}
 
 void UGA_EquipItem::ActivateAbility(
 	const FGameplayAbilitySpecHandle Handle,
@@ -17,18 +27,33 @@ void UGA_EquipItem::ActivateAbility(
 		return;
 	}
 
-	const ULyraInventoryItemInstance* Item =
-		Cast<ULyraInventoryItemInstance>(TriggerEventData->OptionalObject);
+	const ULyraInventoryItemInstance* ItemConst =
+	Cast<ULyraInventoryItemInstance>(TriggerEventData->OptionalObject);
+
+	if (!ItemConst)
+	{
+		EndAbility(Handle, ActorInfo, ActivationInfo, true, false);
+		return;
+	}
+
+	ULyraInventoryItemInstance* Item =
+		const_cast<ULyraInventoryItemInstance*>(ItemConst);
 
 	if (!Item)
 	{
 		EndAbility(Handle, ActorInfo, ActivationInfo, true, false);
 		return;
 	}
-	
+
 	APlayerController* PC =
 		Cast<APlayerController>(ActorInfo->PlayerController.Get());
-	
+
+	if (!PC)
+	{
+		EndAbility(Handle, ActorInfo, ActivationInfo, true, false);
+		return;
+	}
+
 	ULyraInventoryManagerComponent* Inventory =
 		PC->FindComponentByClass<ULyraInventoryManagerComponent>();
 
@@ -37,13 +62,13 @@ void UGA_EquipItem::ActivateAbility(
 		EndAbility(Handle, ActorInfo, ActivationInfo, true, false);
 		return;
 	}
-	
-	Inventory->RemoveItemInstance(
-		const_cast<ULyraInventoryItemInstance*>(Item)
-	);
-	
+
+	// ⭐ 핵심: 인벤토리에서 제거
+	Inventory->RemoveItemInstance(Item);
+
+	// ⭐ UI 갱신용 메시지
 	FLyraInventoryChangeMessage Message;
-	Message.Instance = const_cast<ULyraInventoryItemInstance*>(Item);
+	Message.Instance = Item;
 	Message.Delta = -1;
 
 	FGameplayTag Tag = FGameplayTag::RequestGameplayTag(
