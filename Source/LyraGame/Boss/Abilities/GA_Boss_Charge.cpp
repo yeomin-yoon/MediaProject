@@ -54,13 +54,24 @@ void UGA_Boss_Charge::ActivateAbility(const FGameplayAbilitySpecHandle Handle,
 		EndAbility(Handle,ActorInfo,ActivationInfo,true,false);
 		return;
 	}
-	FVector Dir = (TargetActor->GetActorLocation() - BossCharacter->GetActorLocation()).GetSafeNormal();
+	FVector Dir = TargetActor->GetActorLocation() - BossCharacter->GetActorLocation();
+	Dir.Z = 0.f;
+	Dir = Dir.GetSafeNormal();
+	if (Dir.IsNearlyZero())
+	{
+		EndAbility(Handle, ActorInfo, ActivationInfo, true, false);
+		return;
+	}
+
 	FRotator LookRot = Dir.Rotation();
+	LookRot.Pitch = 0.f;
+	LookRot.Roll = 0.f;
 	BossCharacter->SetActorRotation(LookRot);
+
 	BossCharacter->bIsCharge = true;
 	BossCharacter->GetCharacterMovement()->GroundFriction = 0.f;
 	BossCharacter->GetCharacterMovement()->BrakingDecelerationWalking = 0.f;
-	BossCharacter->LaunchCharacter(Dir * ChargeSpd, true, true);
+	BossCharacter->LaunchCharacter(Dir * ChargeSpd, true, false);
 	
 	
 	

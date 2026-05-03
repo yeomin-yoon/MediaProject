@@ -28,18 +28,12 @@ void ABossCharacterBase::BeginPlay()
 		return;
 	}
 
-	//ASC에 등록 (Granted Effects 적용 → MaxHealth 등 어트리뷰트 초기화)
 	BossAbilitySet->GiveToAbilitySystem(BossASC, nullptr);
 
-	// HealthComponent를 ASC와 연결.
-	// ALyraCharacterWithAbilities는 PawnExtComponent 흐름을 안 타서 OnAbilitySystemInitialized()
-	// 콜백이 자동 호출되지 않음 → InitializeWithAbilitySystem를 직접 호출해야 HealthSet 포인터가 세팅됨.
 	if (ULyraHealthComponent* HealthComp = ULyraHealthComponent::FindHealthComponent(this))
 	{
 		HealthComp->InitializeWithAbilitySystem(BossASC);
 	}
-	// HP 0 → OnOutOfHealth → ASC가 GameplayEvent.Death 송출 → GA_Boss_Death 자동 트리거
-	// (GA_Boss_Death가 ULyraGameplayAbility_Death 상속이라 별도 OnDeathStarted 바인딩 불필요)
 }
 
 void ABossCharacterBase::DebugKill()

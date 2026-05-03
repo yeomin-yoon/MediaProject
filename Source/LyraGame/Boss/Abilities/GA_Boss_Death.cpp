@@ -8,16 +8,7 @@
 
 UGA_Boss_Death::UGA_Boss_Death()
 {
-	// 부모(ULyraGameplayAbility_Death)에서:
-	//  - GameplayEvent.Death 트리거 자동 등록
-	//  - bAutoStartDeath=true → ActivateAbility에서 HealthComponent->StartDeath() 자동 호출
-	//  - EndAbility에서 FinishDeath() 자동 호출
-	//  - 다른 GA CancelAbilities 자동 처리
-
-	// 보스 식별 태그 (필요 시 디버그/검색용)
 	AbilityTags.AddTag(FGameplayTag::RequestGameplayTag("Boss.Action.Death"));
-
-	// 활성화 시 보유 태그: 다른 보스 GA들이 ActivationBlockedTags로 잡으면 자동 차단됨
 	ActivationOwnedTags.AddTag(FGameplayTag::RequestGameplayTag("Boss.State.Dying"));
 }
 
@@ -26,7 +17,6 @@ void UGA_Boss_Death::ActivateAbility(const FGameplayAbilitySpecHandle Handle,
 	const FGameplayAbilityActivationInfo ActivationInfo,
 	const FGameplayEventData* TriggerEventData)
 {
-	// 부모 ActivateAbility가 StartDeath() 호출 → DeathState 변경 + OnDeathStarted broadcast
 	Super::ActivateAbility(Handle, ActorInfo, ActivationInfo, TriggerEventData);
 	UE_LOG(LogTemp, Warning, TEXT("[Death] GA_Boss_Death ActivateAbility 진입"));
 
@@ -41,7 +31,6 @@ void UGA_Boss_Death::ActivateAbility(const FGameplayAbilitySpecHandle Handle,
 		return;
 	}
 
-	// AI 정지 (보스 자기 컨트롤러 기준)
 	if (AAIController* AICon = Cast<AAIController>(Char->GetController()))
 	{
 		if (AICon->BrainComponent)
@@ -50,10 +39,8 @@ void UGA_Boss_Death::ActivateAbility(const FGameplayAbilitySpecHandle Handle,
 		}
 	}
 
-	// 무브먼트 정지
 	Char->GetCharacterMovement()->DisableMovement();
 
-	// 죽음 몽타주 재생
 	if (!DeathMontage)
 	{
 		UE_LOG(LogTemp, Warning, TEXT("[Death] DeathMontage 미지정 → 즉시 종료"));
@@ -72,7 +59,6 @@ void UGA_Boss_Death::ActivateAbility(const FGameplayAbilitySpecHandle Handle,
 
 void UGA_Boss_Death::OnDeathMontageCompleted()
 {
-	// 부모 EndAbility가 FinishDeath() 호출 → OnDeathFinished broadcast → 캐릭터 정리
 	EndAbility(CacheHandle, CacheActorInfo, CacheActivationInfo, true, false);
 }
 

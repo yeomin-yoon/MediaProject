@@ -27,7 +27,6 @@ private:
 	UFUNCTION()
 	void OnDeathMontageCancelled();
 
-	// 죽음 몽타주
 	UPROPERTY(EditDefaultsOnly, Category = "Boss|Death")
 	TObjectPtr<UAnimMontage> DeathMontage;
 
