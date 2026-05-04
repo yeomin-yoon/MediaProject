@@ -9,7 +9,8 @@
       "Bash(cmd /c \"where /r \\\\\"C:\\\\Program Files\\\\Epic Games\\\\UE_5.5\\\\\" AbilitySystemComponent.h\")",
       "Bash(powershell -Command \"Get-ChildItem -Path 'C:\\\\Program Files\\\\Epic Games\\\\UE_5.5' -Filter 'AbilitySystemComponent.h' -Recurse -ErrorAction SilentlyContinue | Select-Object FullName\")",
       "Bash(powershell -Command \"Select-String -Path 'C:\\\\Program Files\\\\Epic Games\\\\UE_5.5\\\\Engine\\\\Plugins\\\\Runtime\\\\GameplayAbilities\\\\Source\\\\GameplayAbilities\\\\Public\\\\AbilitySystemComponent.h' -Pattern 'AbilityEnded' | Select-Object LineNumber, Line\")",
-      "Bash(ls \"C:\\\\GitProjects\\\\MediaProject\\\\Plugins\\\\UIExtension\\\\Source\\\\Private\"\" | grep AutoTargeting; ls \"C:GitProjectsMediaProjectPluginsUIExtensionSourcePublic\"\")"
+      "Bash(ls \"C:\\\\GitProjects\\\\MediaProject\\\\Plugins\\\\UIExtension\\\\Source\\\\Private\"\" | grep AutoTargeting; ls \"C:GitProjectsMediaProjectPluginsUIExtensionSourcePublic\"\")",
+      "WebFetch(domain:dev.epicgames.com)"
     ]
   }
 }

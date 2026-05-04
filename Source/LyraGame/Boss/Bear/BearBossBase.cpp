@@ -10,6 +10,11 @@ void ABearBossBase::Landed(const FHitResult& Hit)
 {
 	Super::Landed(Hit);
 
+	UE_LOG(LogTemp, Warning,
+		TEXT("[Bear] Landed 호출 - HitActor=%s MovementMode=%d"),
+		*GetNameSafe(Hit.GetActor()),
+		(int32)GetCharacterMovement()->MovementMode.GetValue());
+
 	bIsGrounded = true;
 	bIsJumping = false;
 
@@ -56,6 +61,8 @@ void ABearBossBase::ChargeStart()
 
 void ABearBossBase::ChargeEnd()
 {
-	bIsCharge=false;
+	bIsCharge = false;
+	GetCharacterMovement()->GroundFriction = 8.f;
+	GetCharacterMovement()->BrakingDecelerationWalking = 2048.f;
 	GetCharacterMovement()->StopMovementImmediately();
 }

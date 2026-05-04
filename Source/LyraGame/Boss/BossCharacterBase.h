@@ -39,11 +39,10 @@ public:
 protected:
 	virtual void BeginPlay() override;
 	virtual void Tick(float DeltaSeconds) override;
-	
-	//보스 AbilitySet
+
 	UPROPERTY(EditDefaultsOnly, Category = "Boss|Abilities")
 	TObjectPtr<ULyraAbilitySet> BossAbilitySet;
-	
-	
-	
+
+	UFUNCTION(BlueprintCallable, Category = "Boss|Debug")
+	void DebugKill();
 };

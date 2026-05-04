@@ -14,6 +14,7 @@
 #include "GameModes/LyraExperienceManagerComponent.h"
 //@TODO: Would like to isolate this a bit better to get the pawn data in here without this having to know about other stuff
 #include "GameModes/LyraGameMode.h"
+#include "Lobby/LyraLobbyPlayerStateComponent.h"
 #include "LyraLogChannels.h"
 #include "LyraPlayerController.h"
 #include "Messages/LyraVerbMessage.h"
@@ -34,6 +35,8 @@ ALyraPlayerState::ALyraPlayerState(const FObjectInitializer& ObjectInitializer)
 	AbilitySystemComponent = ObjectInitializer.CreateDefaultSubobject<ULyraAbilitySystemComponent>(this, TEXT("AbilitySystemComponent"));
 	AbilitySystemComponent->SetIsReplicated(true);
 	AbilitySystemComponent->SetReplicationMode(EGameplayEffectReplicationMode::Mixed);
+
+	LobbyPlayerStateComponent = ObjectInitializer.CreateDefaultSubobject<ULyraLobbyPlayerStateComponent>(this, TEXT("LobbyPlayerStateComponent"));
 
 	// These attribute sets will be detected by AbilitySystemComponent::InitializeComponent. Keeping a reference so that the sets don't get garbage collected before that.
 	HealthSet = CreateDefaultSubobject<ULyraHealthSet>(TEXT("HealthSet"));

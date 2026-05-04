@@ -7,6 +7,8 @@ UGA_Boss_Summon::UGA_Boss_Summon()
 {
 	InstancingPolicy = EGameplayAbilityInstancingPolicy::InstancedPerActor;
 	AbilityTags.AddTag(FGameplayTag::RequestGameplayTag(FName("Boss.Attack.Summon")));
+	ActivationBlockedTags.AddTag(FGameplayTag::RequestGameplayTag("Boss.State.Stunned"));
+	ActivationBlockedTags.AddTag(FGameplayTag::RequestGameplayTag("Boss.State.Dying"));
 }
 
 void UGA_Boss_Summon::ActivateAbility(const FGameplayAbilitySpecHandle Handle,

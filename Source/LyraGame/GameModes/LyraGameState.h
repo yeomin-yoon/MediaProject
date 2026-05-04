@@ -13,6 +13,7 @@ class APlayerState;
 class UAbilitySystemComponent;
 class ULyraAbilitySystemComponent;
 class ULyraExperienceManagerComponent;
+class ULyraLobbyStateComponent;
 class UObject;
 struct FFrame;
 
@@ -51,6 +52,9 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Lyra|GameState")
 	ULyraAbilitySystemComponent* GetLyraAbilitySystemComponent() const { return AbilitySystemComponent; }
 
+	UFUNCTION(BlueprintCallable, Category = "Lyra|Lobby")
+	ULyraLobbyStateComponent* GetLobbyStateComponent() const { return LobbyStateComponent; }
+
 	// Send a message that all clients will (probably) get
 	// (use only for client notifications like eliminations, server join messages, etc... that can handle being lost)
 	UFUNCTION(NetMulticast, Unreliable, BlueprintCallable, Category = "Lyra|GameState")
@@ -82,6 +86,9 @@ private:
 	// The ability system component subobject for game-wide things (primarily gameplay cues)
 	UPROPERTY(VisibleAnywhere, Category = "Lyra|GameState")
 	TObjectPtr<ULyraAbilitySystemComponent> AbilitySystemComponent;
+
+	UPROPERTY(VisibleAnywhere, Category = "Lyra|Lobby")
+	TObjectPtr<ULyraLobbyStateComponent> LobbyStateComponent;
 
 protected:
 	UPROPERTY(Replicated)

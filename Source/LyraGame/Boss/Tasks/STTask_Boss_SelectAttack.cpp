@@ -3,6 +3,8 @@
 #include "StateTreeLinker.h"
 #include "Boss/BossCharacterBaseAiController.h"
 #include "Boss/BossCharacterBase.h"
+#include "AbilitySystemBlueprintLibrary.h"
+#include "AbilitySystemComponent.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogSelectAttack, Log, All);
 
@@ -37,12 +39,23 @@ EStateTreeRunStatus FSTTask_Boss_SelectAttack::EnterState(FStateTreeExecutionCon
 		return EStateTreeRunStatus::Failed;
 	}
 
-	// 타겟이 없거나 후보가 없으면 기본공격으로 폴백
+
 	auto Fallback = [&]()
 	{
 		SourceBase->SelectedAttackTag = FGameplayTag::RequestGameplayTag(FName("Boss.Behavior.MoveTo"));
 		UE_LOG(LogSelectAttack, Warning, TEXT("SelectAttack: 폴백 → MoveTo(근거리 이동)"));
 	};
+
+	// 스턴 중에는 공격 선택을 하지 않고 MoveTo 폴백으로 보내, GA가 활성화되지 않도록 한다
+	if (UAbilitySystemComponent* BossASC = UAbilitySystemBlueprintLibrary::GetAbilitySystemComponent(SourceBase))
+	{
+		if (BossASC->HasMatchingGameplayTag(FGameplayTag::RequestGameplayTag(FName("Boss.State.Stunned"))))
+		{
+			UE_LOG(LogSelectAttack, Warning, TEXT("SelectAttack: 스턴 상태 → 공격 선택 보류, MoveTo 폴백"));
+			Fallback();
+			return EStateTreeRunStatus::Succeeded;
+		}
+	}
 
 	AActor* Target = SourceController->GetNearestTarget();
 	if (!Target)
@@ -84,7 +97,7 @@ EStateTreeRunStatus FSTTask_Boss_SelectAttack::EnterState(FStateTreeExecutionCon
 	for (const auto& C : Candidates) TotalWeight += C.Value;
 
 	const float RandomNum = FMath::FRandRange(0.f, TotalWeight);
-	const FBossAttackEntry* SelectedEntry = Candidates.Last().Key; // 부동소수점 오차 대비 기본값
+	const FBossAttackEntry* SelectedEntry = Candidates.Last().Key; 
 
 	float Accumulate = 0.f;
 	for (const auto& C : Candidates)
