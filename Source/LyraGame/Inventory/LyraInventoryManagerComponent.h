@@ -5,6 +5,7 @@
 #include "AbilitySystemComponent.h"
 #include "Components/ActorComponent.h"
 #include "Net/Serialization/FastArraySerializer.h"
+#include "Yeomin/Inventory/InventorySaveSubsystem.h"
 
 #include "LyraInventoryManagerComponent.generated.h"
 
@@ -164,6 +165,8 @@ public:
 	void RemoveFromEquipAndReturnToInventory(ULyraInventoryItemInstance* Item);
 	void ApplyEquipEffect(int32 SlotIndex, ULyraInventoryItemInstance* Item);
 	void RemoveEquipEffect(UAbilitySystemComponent* ASC, ULyraInventoryItemInstance* Item);
+	FInventorySaveData MakeSaveData() const;
+	void LoadFromSaveData(const FInventorySaveData& SaveData);
 
 	UFUNCTION(BlueprintCallable, Category=Inventory, BlueprintPure=false)
 	TArray<ULyraInventoryItemInstance*> GetAllItems() const;

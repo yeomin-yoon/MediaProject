@@ -173,6 +173,11 @@ bool ULyraLobbyLoadoutFunctionLibrary::QuickPlayLocalLobbyExperience(const UObje
 		return false;
 	}
 
+	if (ALyraPlayerController* LyraPC = Cast<ALyraPlayerController>(JoiningOrHostingPlayer))
+	{
+		LyraPC->SaveInventoryBeforeTravel();
+	}
+	
 	SessionSubsystem->QuickPlaySession(JoiningOrHostingPlayer, Request);
 	return true;
 }
