@@ -261,12 +261,6 @@ void ULyraInventoryManagerComponent::RemoveItemInstance(ULyraInventoryItemInstan
 	}
 }
 
-void ULyraInventoryManagerComponent::SwapItemInstance(ULyraInventoryItemInstance* A, ULyraInventoryItemInstance* B)
-{
-	if (!A || !B) return;
-
-	InventoryList.SwapEntries(A, B);
-}
 
 void ULyraInventoryManagerComponent::EquipSwap(int32 SlotIndex, ULyraInventoryItemInstance* NewItem)
 {
@@ -405,27 +399,6 @@ bool ULyraInventoryManagerComponent::ReplicateSubobjects(UActorChannel* Channel,
 	}
 
 	return WroteSomething;
-}
-
-int32 ULyraInventoryManagerComponent::FindItemIndex(ULyraInventoryItemInstance* Item) const
-{
-	for (int32 i = 0; i < InventoryList.Entries.Num(); i++)
-	{
-		if (InventoryList.Entries[i].Instance == Item)
-		{
-			return i;
-		}
-	}
-
-	return INDEX_NONE;
-}
-
-ULyraInventoryItemInstance* ULyraInventoryManagerComponent::GetItemByIndex(int32 Index) const
-{
-	if (!InventoryList.Entries.IsValidIndex(Index))
-		return nullptr;
-
-	return InventoryList.Entries[Index].Instance;
 }
 
 bool ULyraInventoryManagerComponent::IsEquipped(ULyraInventoryItemInstance* Item) const

@@ -156,12 +156,8 @@ public:
 	UPROPERTY()
 	TMap<TObjectPtr<ULyraInventoryItemInstance>, FActiveGameplayEffectHandle> ActiveGEMap;
 	FOnEquipChanged OnEquipChanged;
-	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category=Inventory)
-	void SwapItemInstance(ULyraInventoryItemInstance* A, ULyraInventoryItemInstance* B);
 	TArray<TObjectPtr<ULyraInventoryItemInstance>> EquipSlots;
 	void EquipSwap(int32 SlotIndex, ULyraInventoryItemInstance* NewItem);
-	int32 FindItemIndex(ULyraInventoryItemInstance* Item) const;
-	ULyraInventoryItemInstance* GetItemByIndex(int32 Index) const;
 	bool IsEquipped(ULyraInventoryItemInstance* Item) const;
 	void EquipFromInventory(int32 SlotIndex, ULyraInventoryItemInstance* Item);
 	void SwapEquipSlots(int32 A, int32 B);

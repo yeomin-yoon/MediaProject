@@ -63,10 +63,10 @@ void UGA_EquipItem::ActivateAbility(
 		return;
 	}
 
-	// ⭐ 핵심: 인벤토리에서 제거
+	// 인벤토리에서 제거
 	Inventory->RemoveItemInstance(Item);
 
-	// ⭐ UI 갱신용 메시지
+	// UI 갱신용 메시지
 	FLyraInventoryChangeMessage Message;
 	Message.Instance = Item;
 	Message.Delta = -1;
