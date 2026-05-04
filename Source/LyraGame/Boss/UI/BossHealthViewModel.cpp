@@ -25,6 +25,11 @@ void UBossHealthViewModel::BindToBoss(ABossCharacterBase* Boss)
 	SetBossMaxHealth(HealthSet->GetMaxHealth());
 	SetBossHealth(HealthSet->GetHealth());
 
+	// 시작 시점에는 뒤 바도 현재 HP에 맞춰 둠 (0에서 차오르는 연출 방지)
+	DelayedHealthPercent = GetHealthPercent();
+	DelayHoldTimer = 0.f;
+	UE_MVVM_BROADCAST_FIELD_VALUE_CHANGED(GetDelayedHealthPercent);
+
 	Asc->GetGameplayAttributeValueChangeDelegate(ULyraHealthSet::GetHealthAttribute())
 		.AddUObject(this, &UBossHealthViewModel::HandleHealthChanged);
 
@@ -47,15 +52,46 @@ void UBossHealthViewModel::BindToBoss(ABossCharacterBase* Boss)
 // SetBossMaxHealth: 동일 패턴 (GetBossMaxHealth + GetHealthPercent broadcast)
 void UBossHealthViewModel::SetBossHealth(float NewValue)
 {
-	if (NewValue == BossCurrentHealth)
+	const float OldValue = BossCurrentHealth;
+	if (FMath::IsNearlyEqual(NewValue, OldValue))
 	{
 		return;
 	}
 	BossCurrentHealth = NewValue;
 	UE_MVVM_BROADCAST_FIELD_VALUE_CHANGED(GetBossHealth);
 	UE_MVVM_BROADCAST_FIELD_VALUE_CHANGED(GetHealthPercent);
+	UE_MVVM_BROADCAST_FIELD_VALUE_CHANGED(GetCurretHpText);
 
+	if (NewValue < OldValue)
+	{
+		// 피해를 받았을 때만 hold 타이머 리셋 (연속 피격 시 재시작 효과)
+		DelayHoldTimer = DelayHoldDuration;
+	}
+	else
+	{
+		// 회복 시 뒤 바도 즉시 위로 맞춤 (천천히 따라가면 어색함)
+		DelayHoldTimer = 0.f;
+		DelayedHealthPercent = GetHealthPercent();
+		UE_MVVM_BROADCAST_FIELD_VALUE_CHANGED(GetDelayedHealthPercent);
+	}
+}
 
+void UBossHealthViewModel::TickDelayedHealth(float DeltaTime)
+{
+	if (DelayHoldTimer > 0.f)
+	{
+		DelayHoldTimer -= DeltaTime;
+		return;
+	}
+
+	const float Target = GetHealthPercent();
+	if (FMath::IsNearlyEqual(DelayedHealthPercent, Target, KINDA_SMALL_NUMBER))
+	{
+		return;
+	}
+
+	DelayedHealthPercent = FMath::FInterpTo(DelayedHealthPercent, Target, DeltaTime, DelayInterpSpeed);
+	UE_MVVM_BROADCAST_FIELD_VALUE_CHANGED(GetDelayedHealthPercent);
 }
 
 void UBossHealthViewModel::SetBossMaxHealth(float NewValue)
@@ -67,7 +103,8 @@ void UBossHealthViewModel::SetBossMaxHealth(float NewValue)
 	BossMaxHealth = NewValue;
 	UE_MVVM_BROADCAST_FIELD_VALUE_CHANGED(GetBossMaxHealth);
 	UE_MVVM_BROADCAST_FIELD_VALUE_CHANGED(GetHealthPercent);
-	
+	UE_MVVM_BROADCAST_FIELD_VALUE_CHANGED(GetCurretHpText);
+
 }
 
 void UBossHealthViewModel::HandleHealthChanged(const FOnAttributeChangeData& Data)
