@@ -2,6 +2,7 @@
 
 #include "ActionCombatLyraBridgeTags.h"
 
+#include "AbilitySystemComponent.h"
 #include "AbilitySystem/Attributes/LyraHealthSet.h"
 #include "AbilitySystem/LyraGameplayEffectContext.h"
 #include "GameplayEffect.h"
@@ -9,6 +10,7 @@
 #include "GameFramework/Actor.h"
 #include "ActionCombatRuntimeLog.h"
 #include "Teams/LyraTeamSubsystem.h"
+#include "Yeomin/Inventory/CustomStatusAttributeSet.h"
 
 UActionCombatWeaponDamageExecution::UActionCombatWeaponDamageExecution()
 {
@@ -51,6 +53,7 @@ void UActionCombatWeaponDamageExecution::Execute_Implementation(const FGameplayE
     const float BaseDamage = 1 + FMath::Max(GetSpecMagnitude(Spec, ActionCombatLyraBridgeTags::SetByCaller_Attack_BaseDamage, 0.0f), 0.0f);
     const float MotionValue = FMath::Max(GetSpecMagnitude(Spec, ActionCombatLyraBridgeTags::SetByCaller_Attack_MotionValue, 1.0f), 0.0f);
     const float DamageMultiplier = FMath::Max(GetSpecMagnitude(Spec, ActionCombatLyraBridgeTags::SetByCaller_DamageMultiplier, 1.0f), 0.0f);
+    const float CustomAttackPower = FMath::Max(GetSpecMagnitude(Spec, ActionCombatLyraBridgeTags::SetByCaller_Attack_CustomAttackPower, 0.0f), 0.0f);
 
     const float StrengthContribution = GetSpecMagnitude(Spec, ActionCombatLyraBridgeTags::SetByCaller_Attack_Strength, 0.0f)
         * GetSpecMagnitude(Spec, ActionCombatLyraBridgeTags::SetByCaller_Attack_StrengthScaling, 0.0f);
@@ -64,20 +67,29 @@ void UActionCombatWeaponDamageExecution::Execute_Implementation(const FGameplayE
         * GetSpecMagnitude(Spec, ActionCombatLyraBridgeTags::SetByCaller_Attack_ArcaneScaling, 0.0f);
 
     const float StatScaledDamage = StrengthContribution + DexterityContribution + IntelligenceContribution + FaithContribution + ArcaneContribution;
-    const float DamageDone = 1 + FMath::Max((BaseDamage + StatScaledDamage) * MotionValue * DamageMultiplier * DamageInteractionAllowedMultiplier, 0.0f);
+    float TargetDamageReduction = 0.0f;
+    if ((TargetAbilitySystemComponent != nullptr) && TargetAbilitySystemComponent->HasAttributeSetForAttribute(UCustomStatusAttributeSet::GetDamageReductionAttribute()))
+    {
+        TargetDamageReduction = FMath::Max(TargetAbilitySystemComponent->GetNumericAttribute(UCustomStatusAttributeSet::GetDamageReductionAttribute()), 0.0f);
+    }
+
+    const float DamageBeforeReduction = 1 + FMath::Max((BaseDamage + CustomAttackPower + StatScaledDamage) * MotionValue * DamageMultiplier * DamageInteractionAllowedMultiplier, 0.0f);
+    const float DamageDone = FMath::Max(DamageBeforeReduction - TargetDamageReduction, 0.0f);
 
     UE_LOG(
         LogActionCombatRuntime,
         Log,
-        TEXT("ActionCombatWeaponDamageExecution: Effect=%s Causer=%s Target=%s BaseDamage=%.2f StatScaledDamage=%.2f MotionValue=%.2f DamageMultiplier=%.2f TeamMultiplier=%.2f FinalDamage=%.2f"),
+        TEXT("ActionCombatWeaponDamageExecution: Effect=%s Causer=%s Target=%s BaseDamage=%.2f CustomAttackPower=%.2f StatScaledDamage=%.2f MotionValue=%.2f DamageMultiplier=%.2f TeamMultiplier=%.2f DamageReduction=%.2f FinalDamage=%.2f"),
         *GetPathNameSafe(Spec.Def),
         *GetPathNameSafe(EffectCauser),
         *GetPathNameSafe(HitActor),
         BaseDamage,
+        CustomAttackPower,
         StatScaledDamage,
         MotionValue,
         DamageMultiplier,
         DamageInteractionAllowedMultiplier,
+        TargetDamageReduction,
         DamageDone);
 
     if (DamageDone > 0.0f)

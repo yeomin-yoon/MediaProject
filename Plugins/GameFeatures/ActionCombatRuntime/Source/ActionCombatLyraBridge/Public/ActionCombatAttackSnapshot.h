@@ -41,6 +41,9 @@ struct ACTIONCOMBATLYRABRIDGE_API FActionCombatAttackSnapshot
     float ArcaneValue = 0.0f;
 
     UPROPERTY(BlueprintReadOnly, Category = "Action Combat|Attack Snapshot")
+    float CustomAttackPowerValue = 0.0f;
+
+    UPROPERTY(BlueprintReadOnly, Category = "Action Combat|Attack Snapshot")
     float StrengthScaling = 0.0f;
 
     UPROPERTY(BlueprintReadOnly, Category = "Action Combat|Attack Snapshot")
@@ -74,7 +77,7 @@ struct ACTIONCOMBATLYRABRIDGE_API FActionCombatAttackSnapshot
 
     float ComputeAttackPower() const
     {
-        return FMath::Max(ResolvedBaseDamage + ComputeStatScalingContribution(), 0.0f);
+        return FMath::Max(ResolvedBaseDamage + CustomAttackPowerValue + ComputeStatScalingContribution(), 0.0f);
     }
 
     float ComputePreviewDamage(float HitZoneMultiplier = 1.0f) const

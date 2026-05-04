@@ -21,6 +21,7 @@
 #include "GameFramework/Actor.h"
 #include "TimerManager.h"
 #include "Teams/LyraTeamSubsystem.h"
+#include "Yeomin/Inventory/CustomStatusAttributeSet.h"
 
 UActionCombatLyraGameplayAbility_MeleeEffect::UActionCombatLyraGameplayAbility_MeleeEffect(const FObjectInitializer& ObjectInitializer)
     : Super(ObjectInitializer)
@@ -247,11 +248,12 @@ void UActionCombatLyraGameplayAbility_MeleeEffect::BuildActivationAttackSnapshot
     UE_LOG(
         LogActionCombatRuntime,
         Log,
-        TEXT("[MeleeAbility:%s] AttackSnapshot Action=%s BaseDamage=%.2f MotionValue=%.2f StatScaling=%.2f WeaponDefinition=%s"),
+        TEXT("[MeleeAbility:%s] AttackSnapshot Action=%s BaseDamage=%.2f MotionValue=%.2f CustomAttackPower=%.2f StatScaling=%.2f WeaponDefinition=%s"),
         *GetPathNameSafe(GetAvatarActorFromActorInfo()),
         *ActivationAttackSnapshot.ActionTag.ToString(),
         ActivationAttackSnapshot.ResolvedBaseDamage,
         ActivationAttackSnapshot.MotionValue,
+        ActivationAttackSnapshot.CustomAttackPowerValue,
         ActivationAttackSnapshot.ComputeStatScalingContribution(),
         ActivationAttackSnapshot.bUsesWeaponDefinition ? TEXT("true") : TEXT("false"));
 }
@@ -317,6 +319,13 @@ FActionCombatAttackSnapshot UActionCombatLyraGameplayAbility_MeleeEffect::MakeAt
         Snapshot.ArcaneValue = 0.0f;
     }
 
+    bool bFoundCustomAttackPower = false;
+    Snapshot.CustomAttackPowerValue = GetAvatarAttributeValue(UCustomStatusAttributeSet::GetAttackPowerAttribute(), bFoundCustomAttackPower);
+    if (!bFoundCustomAttackPower)
+    {
+        Snapshot.CustomAttackPowerValue = 0.0f;
+    }
+
     if (const AActor* AvatarActor = GetAvatarActorFromActorInfo())
     {
         if (const UActionCombatWeaponDefinition* WeaponDefinition = UActionCombatLyraEquipmentResolver::ResolveEquippedWeaponDefinition(AvatarActor, WeaponResolverData))
@@ -356,6 +365,7 @@ void UActionCombatLyraGameplayAbility_MeleeEffect::ConfigureSnapshotDamageSpec(F
     EffectSpec.SetSetByCallerMagnitude(ActionCombatLyraBridgeTags::SetByCaller_Attack_Intelligence, Snapshot.IntelligenceValue);
     EffectSpec.SetSetByCallerMagnitude(ActionCombatLyraBridgeTags::SetByCaller_Attack_Faith, Snapshot.FaithValue);
     EffectSpec.SetSetByCallerMagnitude(ActionCombatLyraBridgeTags::SetByCaller_Attack_Arcane, Snapshot.ArcaneValue);
+    EffectSpec.SetSetByCallerMagnitude(ActionCombatLyraBridgeTags::SetByCaller_Attack_CustomAttackPower, Snapshot.CustomAttackPowerValue);
     EffectSpec.SetSetByCallerMagnitude(ActionCombatLyraBridgeTags::SetByCaller_Attack_StrengthScaling, Snapshot.StrengthScaling);
     EffectSpec.SetSetByCallerMagnitude(ActionCombatLyraBridgeTags::SetByCaller_Attack_DexterityScaling, Snapshot.DexterityScaling);
     EffectSpec.SetSetByCallerMagnitude(ActionCombatLyraBridgeTags::SetByCaller_Attack_IntelligenceScaling, Snapshot.IntelligenceScaling);
@@ -377,10 +387,11 @@ void UActionCombatLyraGameplayAbility_MeleeEffect::ConfigureSnapshotDamageSpec(F
         UE_LOG(
             LogActionCombatRuntime,
             Log,
-            TEXT("[MeleeAbility:%s] PreparedSnapshotDamage HitActor=%s BaseDamage=%.2f StatScaling=%.2f MotionValue=%.2f Multiplier=%.2f FinalDamage=%.2f"),
+            TEXT("[MeleeAbility:%s] PreparedSnapshotDamage HitActor=%s BaseDamage=%.2f CustomAttackPower=%.2f StatScaling=%.2f MotionValue=%.2f Multiplier=%.2f FinalDamage=%.2f"),
             *GetPathNameSafe(GetAvatarActorFromActorInfo()),
             *GetNameSafe(RecordedHit.HitResult.GetActor()),
             Snapshot.ResolvedBaseDamage,
+            Snapshot.CustomAttackPowerValue,
             Snapshot.ComputeStatScalingContribution(),
             Snapshot.MotionValue,
             RecordedHit.DamageMultiplier,

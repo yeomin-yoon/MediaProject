@@ -17,6 +17,7 @@ namespace ActionCombatLyraBridgeTags
     UE_DEFINE_GAMEPLAY_TAG_COMMENT(SetByCaller_Attack_Intelligence, "SetByCaller.Attack.Intelligence", "Snapshot of the attacker's Intelligence stat at action start.");
     UE_DEFINE_GAMEPLAY_TAG_COMMENT(SetByCaller_Attack_Faith, "SetByCaller.Attack.Faith", "Snapshot of the attacker's Faith stat at action start.");
     UE_DEFINE_GAMEPLAY_TAG_COMMENT(SetByCaller_Attack_Arcane, "SetByCaller.Attack.Arcane", "Snapshot of the attacker's Arcane stat at action start.");
+    UE_DEFINE_GAMEPLAY_TAG_COMMENT(SetByCaller_Attack_CustomAttackPower, "SetByCaller.Attack.CustomAttackPower", "Snapshot of the attacker's project inventory AttackPower stat at action start.");
     UE_DEFINE_GAMEPLAY_TAG_COMMENT(SetByCaller_Attack_StrengthScaling, "SetByCaller.Attack.StrengthScaling", "Weapon Strength scaling coefficient resolved from the equipped weapon definition.");
     UE_DEFINE_GAMEPLAY_TAG_COMMENT(SetByCaller_Attack_DexterityScaling, "SetByCaller.Attack.DexterityScaling", "Weapon Dexterity scaling coefficient resolved from the equipped weapon definition.");
     UE_DEFINE_GAMEPLAY_TAG_COMMENT(SetByCaller_Attack_IntelligenceScaling, "SetByCaller.Attack.IntelligenceScaling", "Weapon Intelligence scaling coefficient resolved from the equipped weapon definition.");

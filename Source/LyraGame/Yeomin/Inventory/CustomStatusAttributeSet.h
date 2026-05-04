@@ -24,14 +24,22 @@ class LYRAGAME_API UCustomStatusAttributeSet : public ULyraAttributeSet
 	GENERATED_BODY()
 	
 public:
+	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 
 	// 공격력
-	UPROPERTY(BlueprintReadOnly, Category="Stat")
+	UPROPERTY(BlueprintReadOnly, ReplicatedUsing = OnRep_AttackPower, Category="Stat")
 	FGameplayAttributeData AttackPower;
 	ATTRIBUTE_ACCESSORS(UCustomStatusAttributeSet, AttackPower)
 
 	// 받는 데미지 감소
-	UPROPERTY(BlueprintReadOnly, Category="Stat")
+	UPROPERTY(BlueprintReadOnly, ReplicatedUsing = OnRep_DamageReduction, Category="Stat")
 	FGameplayAttributeData DamageReduction;
 	ATTRIBUTE_ACCESSORS(UCustomStatusAttributeSet, DamageReduction)
+
+protected:
+	UFUNCTION()
+	void OnRep_AttackPower(const FGameplayAttributeData& OldValue);
+
+	UFUNCTION()
+	void OnRep_DamageReduction(const FGameplayAttributeData& OldValue);
 };
