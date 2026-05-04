@@ -77,6 +77,7 @@ public class LyraGame : ModuleRules
 				"EngineSettings",
 				"DTLSHandlerComponent",
 				"Json",
+				"ModelViewViewModel", "ModelViewViewModel", "ModelViewViewModel",
 			}
 		);
 
