@@ -17,10 +17,12 @@ class APlayerState;
 class FPrimitiveComponentId;
 class IInputInterface;
 class ULyraAbilitySystemComponent;
+class ULyraUserFacingExperienceDefinition;
 class ULyraSettingsShared;
 class UObject;
 class UPlayer;
 struct FFrame;
+struct FPrimaryAssetId;
 
 /**
  * ALyraPlayerController
@@ -49,6 +51,12 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Lyra|PlayerController")
 	bool TryToRecordClientReplay();
 
+	UFUNCTION(BlueprintCallable, Category = "Lyra|Lobby")
+	void RequestConnectedLobbyTravelToExperience(const ULyraUserFacingExperienceDefinition* UserFacingExperience);
+
+	UFUNCTION(BlueprintCallable, Category = "Lyra|Lobby")
+	void RequestConnectedLobbyReadyToTravelToExperience(const ULyraUserFacingExperienceDefinition* UserFacingExperience);
+
 	// Call to see if we should record a replay, subclasses could change this
 	virtual bool ShouldRecordClientReplay();
 
@@ -59,6 +67,12 @@ public:
 	// Run a cheat command on the server for all players.
 	UFUNCTION(Reliable, Server, WithValidation)
 	void ServerCheatAll(const FString& Msg);
+
+	UFUNCTION(Reliable, Server)
+	void ServerRequestConnectedLobbyTravelToExperience(FPrimaryAssetId UserFacingExperienceId);
+
+	UFUNCTION(Reliable, Server)
+	void ServerRequestConnectedLobbyReadyToTravelToExperience(FPrimaryAssetId UserFacingExperienceId);
 
 	//~AActor interface
 	virtual void PreInitializeComponents() override;
@@ -119,6 +133,9 @@ protected:
 
 private:
 	void BroadcastOnPlayerStateChanged();
+	void PushLocalLobbyLoadoutToServer();
+	void MarkLobbyReadyAndMaybeTravelToExperience(const ULyraUserFacingExperienceDefinition* UserFacingExperience);
+	void TravelConnectedLobbyToExperience(const ULyraUserFacingExperienceDefinition* UserFacingExperience);
 
 protected:
 

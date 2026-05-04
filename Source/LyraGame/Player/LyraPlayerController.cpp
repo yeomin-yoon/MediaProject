@@ -12,6 +12,11 @@
 #include "EngineUtils.h"
 #include "LyraGameplayTags.h"
 #include "GameFramework/Pawn.h"
+#include "CommonSessionSubsystem.h"
+#include "Engine/AssetManager.h"
+#include "GameModes/LyraUserFacingExperienceDefinition.h"
+#include "Lobby/LyraLobbyLocalLoadoutSubsystem.h"
+#include "Lobby/LyraLobbyPlayerStateComponent.h"
 #include "Net/UnrealNetwork.h"
 #include "Engine/GameInstance.h"
 #include "AbilitySystemGlobals.h"
@@ -20,6 +25,7 @@
 #include "GameModes/LyraGameState.h"
 #include "Settings/LyraSettingsLocal.h"
 #include "Settings/LyraSettingsShared.h"
+#include "Lobby/LyraLobbyStateComponent.h"
 #include "Replays/LyraReplaySubsystem.h"
 #include "ReplaySubsystem.h"
 #include "Development/LyraDeveloperSettings.h"
@@ -96,6 +102,7 @@ void ALyraPlayerController::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>
 void ALyraPlayerController::ReceivedPlayer()
 {
 	Super::ReceivedPlayer();
+	PushLocalLobbyLoadoutToServer();
 }
 
 void ALyraPlayerController::PlayerTick(float DeltaTime)
@@ -179,6 +186,132 @@ bool ALyraPlayerController::TryToRecordClientReplay()
 		}
 	}
 	return false;
+}
+
+void ALyraPlayerController::RequestConnectedLobbyTravelToExperience(const ULyraUserFacingExperienceDefinition* UserFacingExperience)
+{
+	if (!UserFacingExperience)
+	{
+		return;
+	}
+
+	if (HasAuthority())
+	{
+		TravelConnectedLobbyToExperience(UserFacingExperience);
+	}
+	else
+	{
+		ServerRequestConnectedLobbyTravelToExperience(UserFacingExperience->GetPrimaryAssetId());
+	}
+}
+
+void ALyraPlayerController::RequestConnectedLobbyReadyToTravelToExperience(const ULyraUserFacingExperienceDefinition* UserFacingExperience)
+{
+	if (!UserFacingExperience)
+	{
+		return;
+	}
+
+	if (HasAuthority())
+	{
+		MarkLobbyReadyAndMaybeTravelToExperience(UserFacingExperience);
+	}
+	else
+	{
+		ServerRequestConnectedLobbyReadyToTravelToExperience(UserFacingExperience->GetPrimaryAssetId());
+	}
+}
+
+void ALyraPlayerController::ServerRequestConnectedLobbyTravelToExperience_Implementation(FPrimaryAssetId UserFacingExperienceId)
+{
+	if (!UserFacingExperienceId.IsValid())
+	{
+		return;
+	}
+
+	UAssetManager& AssetManager = UAssetManager::Get();
+	UObject* ExperienceObject = AssetManager.GetPrimaryAssetObject(UserFacingExperienceId);
+	if (!ExperienceObject)
+	{
+		ExperienceObject = AssetManager.GetStreamableManager().LoadSynchronous(AssetManager.GetPrimaryAssetPath(UserFacingExperienceId));
+	}
+
+	const ULyraUserFacingExperienceDefinition* UserFacingExperience = Cast<ULyraUserFacingExperienceDefinition>(ExperienceObject);
+	TravelConnectedLobbyToExperience(UserFacingExperience);
+}
+
+void ALyraPlayerController::ServerRequestConnectedLobbyReadyToTravelToExperience_Implementation(FPrimaryAssetId UserFacingExperienceId)
+{
+	if (!UserFacingExperienceId.IsValid())
+	{
+		return;
+	}
+
+	UAssetManager& AssetManager = UAssetManager::Get();
+	UObject* ExperienceObject = AssetManager.GetPrimaryAssetObject(UserFacingExperienceId);
+	if (!ExperienceObject)
+	{
+		ExperienceObject = AssetManager.GetStreamableManager().LoadSynchronous(AssetManager.GetPrimaryAssetPath(UserFacingExperienceId));
+	}
+
+	const ULyraUserFacingExperienceDefinition* UserFacingExperience = Cast<ULyraUserFacingExperienceDefinition>(ExperienceObject);
+	MarkLobbyReadyAndMaybeTravelToExperience(UserFacingExperience);
+}
+
+void ALyraPlayerController::MarkLobbyReadyAndMaybeTravelToExperience(const ULyraUserFacingExperienceDefinition* UserFacingExperience)
+{
+	if (!HasAuthority() || !UserFacingExperience)
+	{
+		return;
+	}
+
+	if (ALyraPlayerState* LyraPlayerState = GetLyraPlayerState())
+	{
+		if (ULyraLobbyPlayerStateComponent* LobbyPlayerState = LyraPlayerState->GetLobbyPlayerStateComponent())
+		{
+			LobbyPlayerState->SetLobbyReady(true);
+		}
+	}
+
+	ALyraGameState* LyraGameState = GetWorld() ? GetWorld()->GetGameState<ALyraGameState>() : nullptr;
+	ULyraLobbyStateComponent* LobbyState = LyraGameState ? LyraGameState->GetLobbyStateComponent() : nullptr;
+	if (LobbyState && !LobbyState->AreAllPlayersReady())
+	{
+		return;
+	}
+
+	if (LobbyState)
+	{
+		LobbyState->LockReadyPlayers();
+		LobbyState->SetLobbyPhase(ELyraLobbyPhase::Launching);
+	}
+
+	TravelConnectedLobbyToExperience(UserFacingExperience);
+}
+
+void ALyraPlayerController::TravelConnectedLobbyToExperience(const ULyraUserFacingExperienceDefinition* UserFacingExperience)
+{
+	if (!HasAuthority() || !UserFacingExperience)
+	{
+		return;
+	}
+
+	UCommonSession_HostSessionRequest* Request = UserFacingExperience->CreateHostingRequest(this);
+	if (!Request)
+	{
+		return;
+	}
+
+	FText Error;
+	if (!Request->ValidateAndLogErrors(Error))
+	{
+		return;
+	}
+
+	if (UWorld* World = GetWorld())
+	{
+		World->ServerTravel(Request->ConstructTravelURL());
+	}
 }
 
 bool ALyraPlayerController::ShouldRecordClientReplay()
@@ -265,6 +398,40 @@ void ALyraPlayerController::BroadcastOnPlayerStateChanged()
 	ConditionalBroadcastTeamChanged(this, OldTeamID, NewTeamID);
 
 	LastSeenPlayerState = PlayerState;
+
+	PushLocalLobbyLoadoutToServer();
+}
+
+void ALyraPlayerController::PushLocalLobbyLoadoutToServer()
+{
+	if (!IsLocalController())
+	{
+		return;
+	}
+
+	const ULocalPlayer* LocalPlayer = GetLocalPlayer();
+	const int32 LocalPlayerIndex = LocalPlayer ? LocalPlayer->GetLocalPlayerIndex() : 0;
+
+	UGameInstance* GameInstance = GetGameInstance();
+	const ULyraLobbyLocalLoadoutSubsystem* LocalLoadoutSubsystem = GameInstance ? GameInstance->GetSubsystem<ULyraLobbyLocalLoadoutSubsystem>() : nullptr;
+	if (!LocalLoadoutSubsystem)
+	{
+		return;
+	}
+
+	FLyraLobbyPlayerLoadout SavedLoadout;
+	if (!LocalLoadoutSubsystem->GetLocalLoadout(LocalPlayerIndex, SavedLoadout))
+	{
+		return;
+	}
+
+	if (ALyraPlayerState* LyraPlayerState = GetLyraPlayerState())
+	{
+		if (ULyraLobbyPlayerStateComponent* LobbyPlayerState = LyraPlayerState->GetLobbyPlayerStateComponent())
+		{
+			LobbyPlayerState->SubmitLobbyLoadout(SavedLoadout);
+		}
+	}
 }
 
 void ALyraPlayerController::InitPlayerState()
@@ -374,6 +541,7 @@ void ALyraPlayerController::OnCameraPenetratingTarget()
 void ALyraPlayerController::OnPossess(APawn* InPawn)
 {
 	Super::OnPossess(InPawn);
+	PushLocalLobbyLoadoutToServer();
 
 #if WITH_SERVER_CODE && WITH_EDITOR
 	if (GIsEditor && (InPawn != nullptr) && (GetPawn() == InPawn))
