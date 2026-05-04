@@ -6,6 +6,7 @@
 #include "Blueprint/DragDropOperation.h"
 #include "InventoryDragDrop.generated.h"
 
+class UInventoryTileUI;
 /**
  * 
  */
@@ -15,9 +16,15 @@ class LYRAGAME_API UInventoryDragDrop : public UDragDropOperation
 	GENERATED_BODY()
 	
 public:
-	// UPROPERTY()
-	// UInventoryItemInstance* ItemInstance;
+	UPROPERTY()
+	int32 SourceIndex = INDEX_NONE;
+	
+	UPROPERTY()
+	TObjectPtr<UInventoryTileUI> DraggedWidget;
 
 	UPROPERTY()
-	int32 SourceSlotIndex;
+	TObjectPtr<class ULyraInventoryItemInstance> Item = nullptr;
+	
+	UPROPERTY()
+	int32 InventoryIndex = INDEX_NONE;
 };

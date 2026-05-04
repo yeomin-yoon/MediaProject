@@ -2,13 +2,17 @@
 
 #include "LyraInventoryManagerComponent.h"
 
+#include "AbilitySystemComponent.h"
+#include "GameplayEffectTypes.h"
 #include "Engine/ActorChannel.h"
 #include "Engine/World.h"
 #include "GameFramework/GameplayMessageSubsystem.h"
 #include "LyraInventoryItemDefinition.h"
 #include "LyraInventoryItemInstance.h"
 #include "NativeGameplayTags.h"
+#include "GameFramework/PlayerState.h"
 #include "Net/UnrealNetwork.h"
+#include "Yeomin/Inventory/InventoryFragment_EquipEffect.h"
 
 #include UE_INLINE_GENERATED_CPP_BY_NAME(LyraInventoryManagerComponent)
 
@@ -77,50 +81,70 @@ void FLyraInventoryList::BroadcastChangeMessage(FLyraInventoryEntry& Entry, int3
 	MessageSystem.BroadcastMessage(TAG_Lyra_Inventory_Message_StackChanged, Message);
 }
 
-ULyraInventoryItemInstance* FLyraInventoryList::AddEntry(TSubclassOf<ULyraInventoryItemDefinition> ItemDef, int32 StackCount)
+ULyraInventoryItemInstance* FLyraInventoryList::AddEntry(
+	TSubclassOf<ULyraInventoryItemDefinition> ItemDef,
+	int32 StackCount)
 {
-	ULyraInventoryItemInstance* Result = nullptr;
+	check(ItemDef);
+	check(OwnerComponent);
 
-	check(ItemDef != nullptr);
- 	check(OwnerComponent);
-
-	AActor* OwningActor = OwnerComponent->GetOwner();
-	check(OwningActor->HasAuthority());
-
+	AActor* Owner = OwnerComponent->GetOwner();
+	check(Owner->HasAuthority());
 
 	FLyraInventoryEntry& NewEntry = Entries.AddDefaulted_GetRef();
-	NewEntry.Instance = NewObject<ULyraInventoryItemInstance>(OwnerComponent->GetOwner());  //@TODO: Using the actor instead of component as the outer due to UE-127172
-	NewEntry.Instance->SetItemDef(ItemDef);
-	for (ULyraInventoryItemFragment* Fragment : GetDefault<ULyraInventoryItemDefinition>(ItemDef)->Fragments)
-	{
-		if (Fragment != nullptr)
-		{
-			Fragment->OnInstanceCreated(NewEntry.Instance);
-		}
-	}
-	NewEntry.StackCount = StackCount;
-	Result = NewEntry.Instance;
 
-	//const ULyraInventoryItemDefinition* ItemCDO = GetDefault<ULyraInventoryItemDefinition>(ItemDef);
+	NewEntry.Instance = NewObject<ULyraInventoryItemInstance>(Owner);
+	NewEntry.Instance->SetItemDef(ItemDef);
+
+	// ======================================
+	// 🔥 랜덤 생성 (딱 1번)
+	// ======================================
+	NewEntry.Instance->RandomSeed = FMath::Rand();
+	NewEntry.Instance->RandomValue = FMath::FRand();
+
+	NewEntry.StackCount = StackCount;
+
 	MarkItemDirty(NewEntry);
 
-	return Result;
+	return NewEntry.Instance;
 }
 
 void FLyraInventoryList::AddEntry(ULyraInventoryItemInstance* Instance)
 {
-	unimplemented();
+	if (!Instance || !OwnerComponent)
+		return;
+
+	AActor* Owner = OwnerComponent->GetOwner();
+	if (!Owner || !Owner->HasAuthority())
+		return;
+
+	// 🔥 핵심: 이미 Inventory에 있는지만 체크
+	for (const FLyraInventoryEntry& Entry : Entries)
+	{
+		if (Entry.Instance == Instance)
+			return;
+	}
+
+	FLyraInventoryEntry& NewEntry = Entries.AddDefaulted_GetRef();
+	NewEntry.Instance = Instance;
+	NewEntry.StackCount = 1;
+	NewEntry.LastObservedCount = 1;
+
+	MarkItemDirty(NewEntry);
+	BroadcastChangeMessage(NewEntry, 0, 1);
 }
 
 void FLyraInventoryList::RemoveEntry(ULyraInventoryItemInstance* Instance)
 {
-	for (auto EntryIt = Entries.CreateIterator(); EntryIt; ++EntryIt)
+	for (int32 i = 0; i < Entries.Num(); i++)
 	{
-		FLyraInventoryEntry& Entry = *EntryIt;
-		if (Entry.Instance == Instance)
+		if (Entries[i].Instance == Instance)
 		{
-			EntryIt.RemoveCurrent();
+			BroadcastChangeMessage(Entries[i], Entries[i].StackCount, 0);
+
+			Entries.RemoveAt(i);
 			MarkArrayDirty();
+			break;
 		}
 	}
 }
@@ -139,6 +163,40 @@ TArray<ULyraInventoryItemInstance*> FLyraInventoryList::GetAllItems() const
 	return Results;
 }
 
+void FLyraInventoryList::SwapEntries(
+	ULyraInventoryItemInstance* A,
+	ULyraInventoryItemInstance* B)
+{
+	if (!A || !B) return;
+
+	int32 IndexA = INDEX_NONE;
+	int32 IndexB = INDEX_NONE;
+
+	for (int32 i = 0; i < Entries.Num(); i++)
+	{
+		if (Entries[i].Instance == A)
+		{
+			IndexA = i;
+		}
+		else if (Entries[i].Instance == B)
+		{
+			IndexB = i;
+		}
+	}
+
+	if (IndexA == INDEX_NONE || IndexB == INDEX_NONE)
+		return;
+
+	// 핵심: FastArray 안전 Swap
+	Entries.Swap(IndexA, IndexB);
+
+	MarkItemDirty(Entries[IndexA]);
+	MarkItemDirty(Entries[IndexB]);
+
+	BroadcastChangeMessage(Entries[IndexA], 0, 0);
+	BroadcastChangeMessage(Entries[IndexB], 0, 0);
+}
+
 //////////////////////////////////////////////////////////////////////
 // ULyraInventoryManagerComponent
 
@@ -147,6 +205,8 @@ ULyraInventoryManagerComponent::ULyraInventoryManagerComponent(const FObjectInit
 	, InventoryList(this)
 {
 	SetIsReplicatedByDefault(true);
+	
+	EquipSlots.SetNum(3);
 }
 
 void ULyraInventoryManagerComponent::GetLifetimeReplicatedProps(TArray< FLifetimeProperty >& OutLifetimeProps) const
@@ -179,6 +239,11 @@ ULyraInventoryItemInstance* ULyraInventoryManagerComponent::AddItemDefinition(TS
 
 void ULyraInventoryManagerComponent::AddItemInstance(ULyraInventoryItemInstance* ItemInstance)
 {
+	if (!ItemInstance)
+	{
+		return;
+	}
+	
 	InventoryList.AddEntry(ItemInstance);
 	if (IsUsingRegisteredSubObjectList() && IsReadyForReplication() && ItemInstance)
 	{
@@ -195,6 +260,42 @@ void ULyraInventoryManagerComponent::RemoveItemInstance(ULyraInventoryItemInstan
 		RemoveReplicatedSubObject(ItemInstance);
 	}
 }
+
+
+void ULyraInventoryManagerComponent::EquipSwap(int32 SlotIndex, ULyraInventoryItemInstance* NewItem)
+{
+	if (!NewItem || !EquipSlots.IsValidIndex(SlotIndex))
+		return;
+
+	if (EquipSlots[SlotIndex] == NewItem)
+		return;
+
+	// 기존 위치 찾기
+	int32 OldIndex = INDEX_NONE;
+
+	for (int32 i = 0; i < EquipSlots.Num(); i++)
+	{
+		if (EquipSlots[i] == NewItem)
+		{
+			OldIndex = i;
+			break;
+		}
+	}
+
+	// 1. swap 핵심
+	ULyraInventoryItemInstance* OldItem = EquipSlots[SlotIndex];
+
+	EquipSlots[SlotIndex] = NewItem;
+
+	if (OldIndex != INDEX_NONE && OldIndex != SlotIndex)
+	{
+		EquipSlots[OldIndex] = OldItem;
+	}
+
+	// 2. UI 동기화 강제 트리거
+	OnEquipChanged.Broadcast();
+}
+
 
 TArray<ULyraInventoryItemInstance*> ULyraInventoryManagerComponent::GetAllItems() const
 {
@@ -298,6 +399,201 @@ bool ULyraInventoryManagerComponent::ReplicateSubobjects(UActorChannel* Channel,
 	}
 
 	return WroteSomething;
+}
+
+bool ULyraInventoryManagerComponent::IsEquipped(ULyraInventoryItemInstance* Item) const
+{
+	if (!Item || !IsValid(this))
+		return false;
+
+	for (ULyraInventoryItemInstance* Equipped : EquipSlots)
+	{
+		if (!IsValid(Equipped))
+			continue;
+
+		if (Equipped == Item)
+			return true;
+	}
+
+	return false;
+}
+
+void ULyraInventoryManagerComponent::EquipFromInventory(
+	int32 SlotIndex,
+	ULyraInventoryItemInstance* Item)
+{
+	if (!Item || !EquipSlots.IsValidIndex(SlotIndex))
+		return;
+
+	// =========================
+	// 1. 같은 아이템 다른 슬롯 제거
+	// =========================
+	for (int32 i = 0; i < EquipSlots.Num(); i++)
+	{
+		if (EquipSlots[i] == Item)
+		{
+			EquipSlots[i] = nullptr;
+		}
+	}
+
+	// =========================
+	// 2. 기존 아이템 저장
+	// =========================
+	ULyraInventoryItemInstance* OldItem = EquipSlots[SlotIndex];
+
+	// =========================
+	// 3. 슬롯 교체 (핵심)
+	// =========================
+	EquipSlots[SlotIndex] = Item;
+
+	// =========================
+	// 4. GE 처리 (기존 제거 → 신규 적용)
+	// =========================
+	APlayerController* PC = Cast<APlayerController>(GetOwner());
+	APlayerState* PS = PC ? PC->GetPlayerState<APlayerState>() : nullptr;
+	UAbilitySystemComponent* ASC = PS ? PS->FindComponentByClass<UAbilitySystemComponent>() : nullptr;
+
+	if (ASC)
+	{
+		// 기존 GE 제거
+		if (OldItem)
+		{
+			RemoveEquipEffect(ASC, OldItem);
+		}
+
+		// 새 GE 적용
+		ApplyEquipEffect(SlotIndex, Item);
+	}
+
+	// =========================
+	// 5. UI 갱신 트리거
+	// =========================
+	OnEquipChanged.Broadcast();
+}
+
+void ULyraInventoryManagerComponent::SwapEquipSlots(int32 A, int32 B)
+{
+	if (!EquipSlots.IsValidIndex(A) || !EquipSlots.IsValidIndex(B))
+		return;
+
+	if (A == B)
+		return;
+
+	APlayerController* PC = Cast<APlayerController>(GetOwner());
+	APlayerState* PS = PC ? PC->GetPlayerState<APlayerState>() : nullptr;
+	UAbilitySystemComponent* ASC = PS ? PS->FindComponentByClass<UAbilitySystemComponent>() : nullptr;
+
+	ULyraInventoryItemInstance* ItemA = EquipSlots[A];
+	ULyraInventoryItemInstance* ItemB = EquipSlots[B];
+
+	EquipSlots[A] = ItemB;
+	EquipSlots[B] = ItemA;
+
+	// GE 재적용
+	if (ASC)
+	{
+		if (ItemA)
+			ApplyEquipEffect(B, ItemA);
+
+		if (ItemB)
+			ApplyEquipEffect(A, ItemB);
+	}
+
+	OnEquipChanged.Broadcast();
+}
+
+void ULyraInventoryManagerComponent::RemoveFromEquipAndReturnToInventory(
+	ULyraInventoryItemInstance* Item)
+{
+	if (!Item)
+		return;
+
+	APlayerController* PC = Cast<APlayerController>(GetOwner());
+	APlayerState* PS = PC ? PC->GetPlayerState<APlayerState>() : nullptr;
+	UAbilitySystemComponent* ASC = PS ? PS->FindComponentByClass<UAbilitySystemComponent>() : nullptr;
+
+	// =========================
+	// 1. 슬롯 제거
+	// =========================
+	for (int32 i = 0; i < EquipSlots.Num(); i++)
+	{
+		if (EquipSlots[i] == Item)
+		{
+			if (ASC)
+			{
+				RemoveEquipEffect(ASC, Item);
+			}
+
+			EquipSlots[i] = nullptr;
+			break;
+		}
+	}
+
+	OnEquipChanged.Broadcast();
+}
+
+void ULyraInventoryManagerComponent::ApplyEquipEffect(
+	int32 SlotIndex,
+	ULyraInventoryItemInstance* Item)
+{
+	if (!Item)
+		return;
+
+	APlayerController* PC = Cast<APlayerController>(GetOwner());
+	APlayerState* PS = PC ? PC->GetPlayerState<APlayerState>() : nullptr;
+	UAbilitySystemComponent* ASC = PS ? PS->FindComponentByClass<UAbilitySystemComponent>() : nullptr;
+
+	if (!ASC)
+		return;
+
+	const ULyraInventoryItemDefinition* DefCDO =
+		GetDefault<ULyraInventoryItemDefinition>(Item->GetItemDef());
+
+	const UInventoryFragment_EquipEffect* Frag =
+		Cast<UInventoryFragment_EquipEffect>(
+			DefCDO->FindFragmentByClass(UInventoryFragment_EquipEffect::StaticClass())
+		);
+
+	if (!Frag)
+		return;
+
+	// 기존 제거
+	RemoveEquipEffect(ASC, Item);
+
+	float Value = Frag->RollRandomAttack(Item);
+
+	FGameplayEffectContextHandle Context = ASC->MakeEffectContext();
+	FGameplayEffectSpecHandle Spec = ASC->MakeOutgoingSpec(Frag->EquipEffect, 1.f, Context);
+
+	if (!Spec.IsValid())
+		return;
+
+	Spec.Data->SetSetByCallerMagnitude(
+		FGameplayTag::RequestGameplayTag("SetByCaller.Data.AttackPower"),
+		Value
+	);
+
+	FActiveGameplayEffectHandle Handle =
+		ASC->ApplyGameplayEffectSpecToSelf(*Spec.Data.Get());
+
+	ActiveGEMap.Add(Item, Handle);
+}
+
+void ULyraInventoryManagerComponent::RemoveEquipEffect(
+	UAbilitySystemComponent* ASC,
+	ULyraInventoryItemInstance* Item)
+{
+	if (!ASC || !Item)
+		return;
+
+	FActiveGameplayEffectHandle* Handle = ActiveGEMap.Find(Item);
+
+	if (Handle && Handle->IsValid())
+	{
+		ASC->RemoveActiveGameplayEffect(*Handle);
+	}
+
+	ActiveGEMap.Remove(Item);
 }
 
 //////////////////////////////////////////////////////////////////////
