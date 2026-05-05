@@ -65,4 +65,6 @@ void ABearBossBase::ChargeEnd()
 	GetCharacterMovement()->GroundFriction = 8.f;
 	GetCharacterMovement()->BrakingDecelerationWalking = 2048.f;
 	GetCharacterMovement()->StopMovementImmediately();
+	GetCharacterMovement()->SetMovementMode(MOVE_Walking);
 }
+

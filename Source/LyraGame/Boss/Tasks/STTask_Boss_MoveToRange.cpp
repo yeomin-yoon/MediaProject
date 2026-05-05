@@ -1,4 +1,7 @@
 #include "STTask_Boss_MoveToRange.h"
+
+#include "AbilitySystemBlueprintLibrary.h"
+#include "AbilitySystemComponent.h"
 #include "StateTreeExecutionContext.h"
 #include "StateTreeLinker.h"
 #include "AIController.h"
@@ -73,6 +76,13 @@ EStateTreeRunStatus FSTTask_Boss_MoveToRange::Tick(FStateTreeExecutionContext& C
 		UE_LOG(LogMoveToRange, Warning, TEXT("[MoveToRange] Tick: BossController 또는 Pawn nullptr → Failed"));
 		return EStateTreeRunStatus::Failed;
 	}
+	UAbilitySystemComponent* ASC = UAbilitySystemBlueprintLibrary::GetAbilitySystemComponent(BossController->GetPawn());
+	if (ASC && ASC->HasMatchingGameplayTag(FGameplayTag::RequestGameplayTag("Boss.State.Stunned")))
+	{
+		UE_LOG(LogMoveToRange, Warning, TEXT("스턴 감지! MoveTo 강제 중지!"));
+		BossController->StopMovement(); // AI 걷기 즉시 중지
+		return EStateTreeRunStatus::Failed; // 이 이동 태스크를 실패 처리하고 강제 종료!
+	}
 
 	FInstanceDataType& Data = Context.GetInstanceData(*this);
 	Data.ElapsedTime += DeltaTime;
@@ -112,6 +122,7 @@ EStateTreeRunStatus FSTTask_Boss_MoveToRange::Tick(FStateTreeExecutionContext& C
 		UE_LOG(LogMoveToRange, Log, TEXT("[MoveToRange] Tick: 사정거리 진입 (%.1f <= %.1f) → Succeeded"), Dist, Range);
 		return EStateTreeRunStatus::Succeeded;
 	}
+	
 
 	BossController->MoveToActor(Target, 50.f);
 	return EStateTreeRunStatus::Running;
