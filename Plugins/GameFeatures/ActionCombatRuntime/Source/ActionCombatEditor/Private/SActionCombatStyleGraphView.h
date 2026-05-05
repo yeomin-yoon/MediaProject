@@ -12,6 +12,7 @@ public:
     }
 
         SLATE_ARGUMENT(UActionCombatStyleData*, StyleData)
+        SLATE_EVENT(FSimpleDelegate, OnStyleDataEdited)
 
     SLATE_END_ARGS()
 
@@ -19,7 +20,11 @@ public:
     void RefreshGraph();
 
 private:
+    void HandleGraphEdited();
+
+private:
     TWeakObjectPtr<UActionCombatStyleData> StyleData;
+    FSimpleDelegate OnStyleDataEdited;
     TSharedPtr<class STextBlock> SummaryTextBlock;
     TSharedPtr<class SBox> GraphHost;
 };

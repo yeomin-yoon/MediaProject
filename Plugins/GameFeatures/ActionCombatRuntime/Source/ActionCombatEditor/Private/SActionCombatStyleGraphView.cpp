@@ -2,6 +2,10 @@
 
 #include "ActionCombatStyleData.h"
 
+#include "Framework/Application/SlateApplication.h"
+#include "Framework/MultiBox/MultiBoxBuilder.h"
+#include "Rendering/DrawElements.h"
+#include "ScopedTransaction.h"
 #include "Styling/AppStyle.h"
 #include "UObject/UnrealType.h"
 #include "Widgets/Layout/SBorder.h"
@@ -17,10 +21,14 @@ namespace ActionCombatStyleGraphView
 {
     constexpr float CanvasMargin = 80.0f;
     constexpr float NodeWidth = 300.0f;
-    constexpr float NodeHeight = 92.0f;
-    constexpr float ColumnSpacing = 380.0f;
-    constexpr float RowSpacing = 132.0f;
+    constexpr float NodeHeight = 108.0f;
+    constexpr float ColumnSpacing = 620.0f;
+    constexpr float RowSpacing = 156.0f;
     constexpr float LineThickness = 2.0f;
+    constexpr float EdgeAnchorGap = 18.0f;
+    constexpr float ArrowLength = 12.0f;
+    constexpr float ArrowHalfWidth = 6.0f;
+    const FVector2D EdgeLabelSize = FVector2D(260.0f, 70.0f);
 
     struct FGraphNodeVisual
     {
@@ -65,6 +73,19 @@ namespace ActionCombatStyleGraphView
 
         const void* ValuePtr = ActionsProperty->ContainerPtrToValuePtr<void>(StyleData);
         return ValuePtr ? *reinterpret_cast<const TArray<FActionCombatActionDefinition>*>(ValuePtr) : EmptyActions;
+    }
+
+    TArray<FActionCombatActionDefinition>* GetMutableActions(UActionCombatStyleData* StyleData)
+    {
+        static const FArrayProperty* ActionsProperty = FindFProperty<FArrayProperty>(UActionCombatStyleData::StaticClass(), TEXT("Actions"));
+
+        if (!StyleData || !ActionsProperty)
+        {
+            return nullptr;
+        }
+
+        void* ValuePtr = ActionsProperty->ContainerPtrToValuePtr<void>(StyleData);
+        return ValuePtr ? reinterpret_cast<TArray<FActionCombatActionDefinition>*>(ValuePtr) : nullptr;
     }
 
     const TArray<FActionCombatTransitionDefinition>& GetTransitions(const UActionCombatStyleData* StyleData)
@@ -114,9 +135,52 @@ namespace ActionCombatStyleGraphView
         return FString::Join(TagStrings, TEXT(", "));
     }
 
+    FString FormatCommandKeyHint(const FGameplayTag& CommandTag)
+    {
+        const FString Command = CommandTag.ToString();
+
+        if (Command == TEXT("Combat.Command.Light"))
+        {
+            return TEXT("LMB / Primary");
+        }
+
+        if (Command == TEXT("Combat.Command.Alt"))
+        {
+            return TEXT("RMB / Secondary");
+        }
+
+        if (Command == TEXT("Combat.Command.Dodge"))
+        {
+            return TEXT("Shift / Dodge");
+        }
+
+        if (Command == TEXT("Combat.Command.FocusEnter"))
+        {
+            return TEXT("Ctrl Down / Focus");
+        }
+
+        if (Command == TEXT("Combat.Command.FocusExit"))
+        {
+            return TEXT("Ctrl Up / Focus");
+        }
+
+        if (Command == TEXT("Combat.Command.GuardHold"))
+        {
+            return TEXT("RMB Hold / Guard");
+        }
+
+        return FString();
+    }
+
     FString FormatTransitionLabel(const FActionCombatTransitionDefinition& Transition)
     {
         TArray<FString> Parts;
+        const FString KeyHint = FormatCommandKeyHint(Transition.CommandTag);
+        if (!KeyHint.IsEmpty())
+        {
+            Parts.Add(KeyHint);
+        }
+
         Parts.Add(Transition.CommandTag.IsValid() ? Transition.CommandTag.ToString() : TEXT("Invalid Command"));
 
         if (Transition.bRequiresFocusActive)
@@ -185,20 +249,26 @@ namespace ActionCombatStyleGraphView
                 Node.bIsSynthetic = true;
             });
 
-        for (const FActionCombatActionDefinition& Action : Actions)
+        for (int32 ActionIndex = 0; ActionIndex < Actions.Num(); ++ActionIndex)
         {
-            const FString ActionKey = FormatTag(Action.ActionTag);
+            const FActionCombatActionDefinition& Action = Actions[ActionIndex];
+            const bool bHasValidActionTag = Action.ActionTag.IsValid();
+            const FString ActionKey = bHasValidActionTag
+                ? FormatTag(Action.ActionTag)
+                : FString::Printf(TEXT("__InvalidAction_%d"), ActionIndex);
 
             FindOrAddNode(
                 Layout,
                 NodeIndexByKey,
                 ActionKey,
-                [&Action, &ActionKey](FGraphNodeVisual& Node)
+                [&Action, &ActionKey, bHasValidActionTag](FGraphNodeVisual& Node)
                 {
                     Node.Key = ActionKey;
-                    Node.Title = ActionKey;
+                    Node.Title = bHasValidActionTag ? ActionKey : TEXT("New Action - set ActionTag");
                     Node.Subtitle = FormatActionSubtitle(Action);
-                    Node.FillColor = FLinearColor(0.20f, 0.21f, 0.25f, 1.0f);
+                    Node.FillColor = bHasValidActionTag
+                        ? FLinearColor(0.20f, 0.21f, 0.25f, 1.0f)
+                        : FLinearColor(0.31f, 0.25f, 0.12f, 1.0f);
                 });
         }
 
@@ -366,12 +436,40 @@ namespace ActionCombatStyleGraphView
         }
 
             SLATE_ARGUMENT(FGraphLayout, GraphLayout)
+            SLATE_ARGUMENT(UActionCombatStyleData*, StyleData)
+            SLATE_EVENT(FSimpleDelegate, OnGraphEdited)
 
         SLATE_END_ARGS()
 
         void Construct(const FArguments& InArgs)
         {
             GraphLayout = InArgs._GraphLayout;
+            StyleData = InArgs._StyleData;
+            OnGraphEdited = InArgs._OnGraphEdited;
+        }
+
+        virtual FReply OnMouseButtonUp(const FGeometry& MyGeometry, const FPointerEvent& MouseEvent) override
+        {
+            if (MouseEvent.GetEffectingButton().GetFName() != TEXT("RightMouseButton"))
+            {
+                return FReply::Unhandled();
+            }
+
+            FMenuBuilder MenuBuilder(true, nullptr);
+            MenuBuilder.AddMenuEntry(
+                LOCTEXT("AddActionNode", "Add Action Node"),
+                LOCTEXT("AddActionNodeTooltip", "Append a new action entry. Set its ActionTag and Montage in Details."),
+                FSlateIcon(),
+                FUIAction(FExecuteAction::CreateSP(this, &SActionCombatStyleGraphLines::AddActionNode)));
+
+            FSlateApplication::Get().PushMenu(
+                AsShared(),
+                FWidgetPath(),
+                MenuBuilder.MakeWidget(),
+                MouseEvent.GetScreenSpacePosition(),
+                FPopupTransitionEffect(FPopupTransitionEffect::ContextMenu));
+
+            return FReply::Handled();
         }
 
         virtual int32 OnPaint(const FPaintArgs& Args, const FGeometry& AllottedGeometry, const FSlateRect& MyCullingRect,
@@ -417,17 +515,49 @@ namespace ActionCombatStyleGraphView
                 const FGraphNodeVisual& FromNode = GraphLayout.Nodes[Edge.FromNodeIndex];
                 const FGraphNodeVisual& ToNode = GraphLayout.Nodes[Edge.ToNodeIndex];
 
-                const FVector2D StartPoint = FromNode.Position + FVector2D(FromNode.Size.X, FromNode.Size.Y * 0.5f);
-                const FVector2D EndPoint = ToNode.Position + FVector2D(0.0f, ToNode.Size.Y * 0.5f);
-                const float MidX = (StartPoint.X + EndPoint.X) * 0.5f;
+                const bool bForwardEdge = ToNode.Position.X >= FromNode.Position.X + FromNode.Size.X;
+                const FVector2D StartPoint = bForwardEdge
+                    ? FromNode.Position + FVector2D(FromNode.Size.X + EdgeAnchorGap, FromNode.Size.Y * 0.5f)
+                    : FromNode.Position + FVector2D(FromNode.Size.X * 0.5f, FromNode.Size.Y + EdgeAnchorGap);
+                const FVector2D EndPoint = bForwardEdge
+                    ? ToNode.Position + FVector2D(-EdgeAnchorGap, ToNode.Size.Y * 0.5f)
+                    : ToNode.Position + FVector2D(ToNode.Size.X * 0.5f, -EdgeAnchorGap);
 
-                const TArray<FVector2D> EdgePoints =
+                TArray<FVector2D> EdgePoints;
+                FVector2D ArrowDirection = FVector2D(1.0f, 0.0f);
+                FVector2D LabelPosition;
+
+                if (bForwardEdge)
                 {
-                    StartPoint,
-                    FVector2D(MidX, StartPoint.Y),
-                    FVector2D(MidX, EndPoint.Y),
-                    EndPoint
-                };
+                    const float MidX = (StartPoint.X + EndPoint.X) * 0.5f;
+                    const float LabelX = StartPoint.X + FMath::Max(0.0f, EndPoint.X - StartPoint.X - EdgeLabelSize.X) * 0.5f;
+                    EdgePoints =
+                    {
+                        StartPoint,
+                        FVector2D(MidX, StartPoint.Y),
+                        FVector2D(MidX, EndPoint.Y),
+                        EndPoint
+                    };
+                    ArrowDirection = FVector2D(1.0f, 0.0f);
+                    LabelPosition = FVector2D(
+                        LabelX,
+                        (StartPoint.Y + EndPoint.Y) * 0.5f - EdgeLabelSize.Y * 0.5f);
+                }
+                else
+                {
+                    const float RouteY = FMath::Max(StartPoint.Y, EndPoint.Y) + 56.0f;
+                    EdgePoints =
+                    {
+                        StartPoint,
+                        FVector2D(StartPoint.X, RouteY),
+                        FVector2D(EndPoint.X, RouteY),
+                        EndPoint
+                    };
+                    ArrowDirection = FVector2D(0.0f, -1.0f);
+                    LabelPosition = FVector2D(
+                        (StartPoint.X + EndPoint.X) * 0.5f - EdgeLabelSize.X * 0.5f,
+                        RouteY + 8.0f);
+                }
 
                 FSlateDrawElement::MakeLines(
                     OutDrawElements,
@@ -439,16 +569,19 @@ namespace ActionCombatStyleGraphView
                     true,
                     LineThickness);
 
+                const FVector2D Direction = ArrowDirection.GetSafeNormal();
+                const FVector2D ArrowBack = -Direction * ArrowLength;
+                const FVector2D ArrowSide = FVector2D(-Direction.Y, Direction.X) * ArrowHalfWidth;
                 const TArray<FVector2D> ArrowHeadA =
                 {
                     EndPoint,
-                    EndPoint + FVector2D(-10.0f, -6.0f)
+                    EndPoint + ArrowBack + ArrowSide
                 };
 
                 const TArray<FVector2D> ArrowHeadB =
                 {
                     EndPoint,
-                    EndPoint + FVector2D(-10.0f, 6.0f)
+                    EndPoint + ArrowBack - ArrowSide
                 };
 
                 FSlateDrawElement::MakeLines(
@@ -471,19 +604,29 @@ namespace ActionCombatStyleGraphView
                     true,
                     LineThickness);
 
-                FSlateDrawElement::MakeText(
+                FSlateDrawElement::MakeBox(
                     OutDrawElements,
                     LayerId + 3,
                     AllottedGeometry.ToPaintGeometry(
-                        FVector2f(220.0f, 48.0f),
-                        FSlateLayoutTransform(FVector2f(MidX + 10.0f, (StartPoint.Y + EndPoint.Y) * 0.5f - 14.0f))),
+                        FVector2f(EdgeLabelSize.X, EdgeLabelSize.Y),
+                        FSlateLayoutTransform(FVector2f(LabelPosition.X, LabelPosition.Y))),
+                    FAppStyle::GetBrush("WhiteBrush"),
+                    ESlateDrawEffect::None,
+                    FLinearColor(0.07f, 0.08f, 0.09f, 0.88f));
+
+                FSlateDrawElement::MakeText(
+                    OutDrawElements,
+                    LayerId + 4,
+                    AllottedGeometry.ToPaintGeometry(
+                        FVector2f(EdgeLabelSize.X - 12.0f, EdgeLabelSize.Y - 8.0f),
+                        FSlateLayoutTransform(FVector2f(LabelPosition.X + 6.0f, LabelPosition.Y + 4.0f))),
                     Edge.Label,
                     LabelFont,
                     ESlateDrawEffect::None,
                     FLinearColor(0.92f, 0.92f, 0.92f, 1.0f));
             }
 
-            return LayerId + 3;
+            return LayerId + 4;
         }
 
         virtual FVector2D ComputeDesiredSize(float LayoutScaleMultiplier) const override
@@ -492,7 +635,39 @@ namespace ActionCombatStyleGraphView
         }
 
     private:
+        void AddActionNode()
+        {
+            UActionCombatStyleData* Style = StyleData.Get();
+            TArray<FActionCombatActionDefinition>* Actions = GetMutableActions(Style);
+            if (!Style || !Actions)
+            {
+                return;
+            }
+
+            const FScopedTransaction Transaction(LOCTEXT("AddActionNodeTransaction", "Add Action Combat Action Node"));
+            Style->Modify();
+
+            FActionCombatActionDefinition NewAction;
+            if (!Actions->IsEmpty())
+            {
+                NewAction = Actions->Last();
+                NewAction.ActionTag = FGameplayTag();
+                NewAction.Montage = nullptr;
+            }
+
+            Actions->Add(NewAction);
+            Style->MarkPackageDirty();
+            Style->PostEditChange();
+
+            if (OnGraphEdited.IsBound())
+            {
+                OnGraphEdited.Execute();
+            }
+        }
+
         FGraphLayout GraphLayout;
+        TWeakObjectPtr<UActionCombatStyleData> StyleData;
+        FSimpleDelegate OnGraphEdited;
     };
 
     TSharedRef<SWidget> BuildNodeWidget(const FGraphNodeVisual& Node)
@@ -524,7 +699,7 @@ namespace ActionCombatStyleGraphView
             ];
     }
 
-    TSharedRef<SWidget> BuildGraphWidget(const FGraphLayout& GraphLayout)
+    TSharedRef<SWidget> BuildGraphWidget(const FGraphLayout& GraphLayout, UActionCombatStyleData* StyleData, FSimpleDelegate OnGraphEdited)
     {
         TSharedRef<SConstraintCanvas> NodeCanvas = SNew(SConstraintCanvas);
 
@@ -554,6 +729,8 @@ namespace ActionCombatStyleGraphView
                         [
                             SNew(SActionCombatStyleGraphLines)
                             .GraphLayout(GraphLayout)
+                            .StyleData(StyleData)
+                            .OnGraphEdited(OnGraphEdited)
                         ]
                         + SOverlay::Slot()
                         [
@@ -568,6 +745,7 @@ namespace ActionCombatStyleGraphView
 void SActionCombatStyleGraphView::Construct(const FArguments& InArgs)
 {
     StyleData = InArgs._StyleData;
+    OnStyleDataEdited = InArgs._OnStyleDataEdited;
 
     ChildSlot
     [
@@ -643,7 +821,20 @@ void SActionCombatStyleGraphView::RefreshGraph()
         return;
     }
 
-    GraphHost->SetContent(ActionCombatStyleGraphView::BuildGraphWidget(GraphLayout));
+    GraphHost->SetContent(ActionCombatStyleGraphView::BuildGraphWidget(
+        GraphLayout,
+        StyleData.Get(),
+        FSimpleDelegate::CreateSP(this, &SActionCombatStyleGraphView::HandleGraphEdited)));
+}
+
+void SActionCombatStyleGraphView::HandleGraphEdited()
+{
+    if (OnStyleDataEdited.IsBound())
+    {
+        OnStyleDataEdited.Execute();
+    }
+
+    RefreshGraph();
 }
 
 #undef LOCTEXT_NAMESPACE

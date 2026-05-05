@@ -2,12 +2,16 @@
 
 #include "Components/ActorComponent.h"
 #include "GameFramework/CharacterMovementComponent.h"
+#include "UObject/SoftObjectPtr.h"
 
 #include "ActionCombatReactionComponent.generated.h"
 
 class AActor;
 class UAbilitySystemComponent;
+class UAnimMontage;
+class UAnimSequenceBase;
 class UActionCombatReactionSet;
+class USkeletalMeshComponent;
 
 UENUM(BlueprintType)
 enum class EActionCombatReactionOutcome : uint8
@@ -18,6 +22,7 @@ enum class EActionCombatReactionOutcome : uint8
     Knockdown
 };
 
+UENUM(BlueprintType)
 enum class EActionCombatReactionState : uint8
 {
     None,
@@ -48,6 +53,61 @@ struct ACTIONCOMBATRUNTIME_API FActionCombatReactionHit
     {
         return (PoiseDamage > KINDA_SMALL_NUMBER) || (KnockdownPower > KINDA_SMALL_NUMBER);
     }
+};
+
+UENUM(BlueprintType)
+enum class EActionCombatReactionDirection : uint8
+{
+    Front,
+    Back,
+    Left,
+    Right
+};
+
+USTRUCT(BlueprintType)
+struct ACTIONCOMBATRUNTIME_API FActionCombatReactionAnimation
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Action Combat|Reaction")
+    TSoftObjectPtr<UAnimMontage> Montage;
+
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Action Combat|Reaction")
+    TSoftObjectPtr<UAnimSequenceBase> Sequence;
+
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Action Combat|Reaction", meta = (ClampMin = "0.01"))
+    float PlayRate = 1.0f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Action Combat|Reaction", meta = (ClampMin = "0.0"))
+    float BlendInSeconds = 0.05f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Action Combat|Reaction", meta = (ClampMin = "0.0"))
+    float BlendOutSeconds = 0.08f;
+
+    bool HasAnimation() const
+    {
+        return !Montage.IsNull() || !Sequence.IsNull();
+    }
+};
+
+USTRUCT(BlueprintType)
+struct ACTIONCOMBATRUNTIME_API FActionCombatDirectionalReactionAnimations
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Action Combat|Reaction")
+    FActionCombatReactionAnimation Front;
+
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Action Combat|Reaction")
+    FActionCombatReactionAnimation Back;
+
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Action Combat|Reaction")
+    FActionCombatReactionAnimation Left;
+
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Action Combat|Reaction")
+    FActionCombatReactionAnimation Right;
+
+    const FActionCombatReactionAnimation* FindAnimation(EActionCombatReactionDirection Direction) const;
 };
 
 USTRUCT(BlueprintType)
@@ -81,6 +141,7 @@ public:
 
     virtual void BeginPlay() override;
     virtual void TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction) override;
+    virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 
     UFUNCTION(BlueprintPure, Category = "Action Combat|Reaction")
     static UActionCombatReactionComponent* FindReactionComponent(const AActor* Actor);
@@ -138,6 +199,27 @@ protected:
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Action Combat|Reaction")
     bool bDisableMovementDuringHitReaction = true;
 
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Action Combat|Reaction|Animation")
+    bool bAutoPlayReactionAnimations = true;
+
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Action Combat|Reaction|Animation")
+    FName ReactionSlotName = TEXT("DefaultSlot");
+
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Action Combat|Reaction|Animation")
+    bool bStopPreviousReactionAnimation = true;
+
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Action Combat|Reaction|Animation")
+    FActionCombatDirectionalReactionAnimations LightHitAnimations;
+
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Action Combat|Reaction|Animation")
+    FActionCombatDirectionalReactionAnimations HeavyHitAnimations;
+
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Action Combat|Reaction|Animation")
+    FActionCombatReactionAnimation KnockdownAnimation;
+
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Action Combat|Reaction|Animation")
+    FActionCombatReactionAnimation GetUpAnimation;
+
 private:
     UAbilitySystemComponent* ResolveAbilitySystemComponent() const;
     UActionCombatReactionSet* FindReactionSet() const;
@@ -149,7 +231,7 @@ private:
     void SetCurrentPoise(float NewValue) const;
     void ClearReactionTags() const;
     void UpdateReactionTags() const;
-    void BeginTimedReaction(EActionCombatReactionState NewState, float DurationSeconds);
+    void BeginTimedReaction(EActionCombatReactionState NewState, float DurationSeconds, const FVector& WorldSpaceImpulseDirection);
     void BeginKnockdown(const FVector& WorldSpaceImpulseDirection);
     void BeginGetUp();
     void FinishReaction(float AdditionalImmunitySeconds);
@@ -157,12 +239,30 @@ private:
     bool InterruptCombatAction() const;
     void ApplyMovementLock(bool bLockMovement);
     void ApplyKnockdownLaunch(const FVector& WorldSpaceImpulseDirection);
+    void StartReactionCue(EActionCombatReactionState NewState, const FVector& WorldSpaceImpulseDirection);
+    void PlayReactionAnimation(EActionCombatReactionState ReactionState, const FVector& WorldSpaceImpulseDirection);
+    const FActionCombatReactionAnimation* FindReactionAnimation(EActionCombatReactionState ReactionState, EActionCombatReactionDirection Direction) const;
+    EActionCombatReactionDirection ResolveReactionDirection(const FVector& WorldSpaceImpulseDirection) const;
+    USkeletalMeshComponent* ResolveAnimationMesh() const;
     double GetCurrentWorldTimeSeconds() const;
+
+    UFUNCTION()
+    void OnRep_ReplicatedReactionCue();
 
     mutable TWeakObjectPtr<UActionCombatReactionSet> CachedReactionSet;
     FTimerHandle ReactionTimerHandle;
+    UPROPERTY(Transient)
+    TObjectPtr<UAnimMontage> ActiveReactionMontage;
+    UPROPERTY(Replicated)
+    EActionCombatReactionState ReplicatedReactionCueState = EActionCombatReactionState::None;
+    UPROPERTY(Replicated)
+    FVector_NetQuantizeNormal ReplicatedReactionCueDirection = FVector::ZeroVector;
+    UPROPERTY(ReplicatedUsing = OnRep_ReplicatedReactionCue)
+    int32 ReplicatedReactionCueId = 0;
     TEnumAsByte<EMovementMode> SavedMovementMode = MOVE_Walking;
     uint8 SavedCustomMovementMode = 0;
+    FVector LastReactionImpulseDirection = FVector::ZeroVector;
+    int32 LastPlayedReactionCueId = 0;
     double LastIncomingHitWorldTimeSeconds = -1.0;
     double LastPoiseBreakWorldTimeSeconds = -1.0;
     double ReactionImmunityEndWorldTimeSeconds = -1.0;

@@ -130,6 +130,7 @@ TSharedRef<SDockTab> FActionCombatStyleAssetEditor::SpawnGraphTab(const FSpawnTa
         [
             SAssignNew(GraphView, SActionCombatStyleGraphView)
             .StyleData(StyleData)
+            .OnStyleDataEdited(FSimpleDelegate::CreateRaw(this, &FActionCombatStyleAssetEditor::HandleGraphEdited))
         ];
 }
 
@@ -149,6 +150,14 @@ void FActionCombatStyleAssetEditor::HandleFinishedChangingProperties(const FProp
     if (GraphView.IsValid())
     {
         GraphView->RefreshGraph();
+    }
+}
+
+void FActionCombatStyleAssetEditor::HandleGraphEdited()
+{
+    if (DetailsView.IsValid())
+    {
+        DetailsView->ForceRefresh();
     }
 }
 

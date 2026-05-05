@@ -20,6 +20,7 @@ public class ActionCombatEditor : ModuleRules
             {
                 "AssetTools",
                 "EditorFramework",
+                "InputCore",
                 "PropertyEditor",
                 "Slate",
                 "SlateCore",

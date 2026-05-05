@@ -7,16 +7,74 @@
 
 #include "AbilitySystemComponent.h"
 #include "AbilitySystemGlobals.h"
+#include "Animation/AnimInstance.h"
+#include "Animation/AnimMontage.h"
+#include "Animation/AnimSequenceBase.h"
+#include "Components/SkeletalMeshComponent.h"
 #include "GameFramework/Actor.h"
 #include "GameFramework/Character.h"
 #include "GameFramework/CharacterMovementComponent.h"
+#include "Net/UnrealNetwork.h"
 #include "TimerManager.h"
+
+const FActionCombatReactionAnimation* FActionCombatDirectionalReactionAnimations::FindAnimation(EActionCombatReactionDirection Direction) const
+{
+    const FActionCombatReactionAnimation* ExactMatch = nullptr;
+    switch (Direction)
+    {
+    case EActionCombatReactionDirection::Front:
+        ExactMatch = &Front;
+        break;
+    case EActionCombatReactionDirection::Back:
+        ExactMatch = &Back;
+        break;
+    case EActionCombatReactionDirection::Left:
+        ExactMatch = &Left;
+        break;
+    case EActionCombatReactionDirection::Right:
+        ExactMatch = &Right;
+        break;
+    default:
+        break;
+    }
+
+    if (ExactMatch && ExactMatch->HasAnimation())
+    {
+        return ExactMatch;
+    }
+
+    const FActionCombatReactionAnimation* Fallbacks[] = { &Front, &Back, &Left, &Right };
+    for (const FActionCombatReactionAnimation* Fallback : Fallbacks)
+    {
+        if (Fallback && Fallback->HasAnimation())
+        {
+            return Fallback;
+        }
+    }
+
+    return nullptr;
+}
 
 UActionCombatReactionComponent::UActionCombatReactionComponent(const FObjectInitializer& ObjectInitializer)
     : Super(ObjectInitializer)
 {
     PrimaryComponentTick.bCanEverTick = true;
     PrimaryComponentTick.bStartWithTickEnabled = false;
+    SetIsReplicatedByDefault(true);
+
+    LightHitAnimations.Front.Montage = TSoftObjectPtr<UAnimMontage>(FSoftObjectPath(TEXT("/Game/Characters/Heroes/Mannequin/Animations/Actions/AM_MM_HitReact_Front_Lgt_01.AM_MM_HitReact_Front_Lgt_01")));
+    LightHitAnimations.Back.Montage = TSoftObjectPtr<UAnimMontage>(FSoftObjectPath(TEXT("/Game/Characters/Heroes/Mannequin/Animations/Actions/AM_MM_HitReact_Back_Lgt_01.AM_MM_HitReact_Back_Lgt_01")));
+    LightHitAnimations.Left.Montage = TSoftObjectPtr<UAnimMontage>(FSoftObjectPath(TEXT("/Game/Characters/Heroes/Mannequin/Animations/Actions/AM_MM_HitReact_Left_Lgt_01.AM_MM_HitReact_Left_Lgt_01")));
+    LightHitAnimations.Right.Montage = TSoftObjectPtr<UAnimMontage>(FSoftObjectPath(TEXT("/Game/Characters/Heroes/Mannequin/Animations/Actions/AM_MM_HitReact_Right_Lgt_01.AM_MM_HitReact_Right_Lgt_01")));
+
+    HeavyHitAnimations.Front.Montage = TSoftObjectPtr<UAnimMontage>(FSoftObjectPath(TEXT("/Game/Characters/Heroes/Mannequin/Animations/Actions/AM_MM_HitReact_Front_Hvy_01.AM_MM_HitReact_Front_Hvy_01")));
+    HeavyHitAnimations.Back.Montage = TSoftObjectPtr<UAnimMontage>(FSoftObjectPath(TEXT("/Game/Characters/Heroes/Mannequin/Animations/Actions/AM_MM_HitReact_Back_Med_01.AM_MM_HitReact_Back_Med_01")));
+    HeavyHitAnimations.Left.Montage = TSoftObjectPtr<UAnimMontage>(FSoftObjectPath(TEXT("/Game/Characters/Heroes/Mannequin/Animations/Actions/AM_MM_HitReact_Left_Med_01.AM_MM_HitReact_Left_Med_01")));
+    HeavyHitAnimations.Right.Montage = TSoftObjectPtr<UAnimMontage>(FSoftObjectPath(TEXT("/Game/Characters/Heroes/Mannequin/Animations/Actions/AM_MM_HitReact_Right_Med_01.AM_MM_HitReact_Right_Med_01")));
+
+    KnockdownAnimation.Sequence = TSoftObjectPtr<UAnimSequenceBase>(FSoftObjectPath(TEXT("/Game/1dev/OS/QuaterniusUAL2/Retargeted/Manny/Manny_Hit_Knockback_RM.Manny_Hit_Knockback_RM")));
+    KnockdownAnimation.BlendInSeconds = 0.08f;
+    KnockdownAnimation.BlendOutSeconds = 0.12f;
 }
 
 void UActionCombatReactionComponent::BeginPlay()
@@ -64,6 +122,15 @@ void UActionCombatReactionComponent::TickComponent(float DeltaTime, ELevelTick T
     }
 }
 
+void UActionCombatReactionComponent::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
+{
+    Super::GetLifetimeReplicatedProps(OutLifetimeProps);
+
+    DOREPLIFETIME(ThisClass, ReplicatedReactionCueState);
+    DOREPLIFETIME(ThisClass, ReplicatedReactionCueDirection);
+    DOREPLIFETIME(ThisClass, ReplicatedReactionCueId);
+}
+
 UActionCombatReactionComponent* UActionCombatReactionComponent::FindReactionComponent(const AActor* Actor)
 {
     return Actor ? Actor->FindComponentByClass<UActionCombatReactionComponent>() : nullptr;
@@ -92,6 +159,7 @@ UActionCombatReactionComponent* UActionCombatReactionComponent::FindOrCreateReac
         return nullptr;
     }
 
+    NewComponent->SetIsReplicated(true);
     Actor->AddInstanceComponent(NewComponent);
     NewComponent->RegisterComponent();
     return NewComponent;
@@ -204,13 +272,13 @@ bool UActionCombatReactionComponent::TryApplyReactionHit(const FActionCombatReac
         OutResult.Outcome = EActionCombatReactionOutcome::HeavyHit;
         OutResult.bInterruptedCombatAction = InterruptCombatAction();
         SetCurrentPoise(MaxPoise);
-        BeginTimedReaction(EActionCombatReactionState::HeavyHit, HeavyHitDurationSeconds);
+        BeginTimedReaction(EActionCombatReactionState::HeavyHit, HeavyHitDurationSeconds, IncomingHit.WorldSpaceImpulseDirection);
     }
     else if (EffectivePoiseDamage > KINDA_SMALL_NUMBER)
     {
         OutResult.Outcome = EActionCombatReactionOutcome::LightHit;
         OutResult.bInterruptedCombatAction = InterruptCombatAction();
-        BeginTimedReaction(EActionCombatReactionState::LightHit, LightHitDurationSeconds);
+        BeginTimedReaction(EActionCombatReactionState::LightHit, LightHitDurationSeconds, IncomingHit.WorldSpaceImpulseDirection);
     }
 
     UE_LOG(
@@ -374,7 +442,7 @@ void UActionCombatReactionComponent::UpdateReactionTags() const
     }
 }
 
-void UActionCombatReactionComponent::BeginTimedReaction(EActionCombatReactionState NewState, float DurationSeconds)
+void UActionCombatReactionComponent::BeginTimedReaction(EActionCombatReactionState NewState, float DurationSeconds, const FVector& WorldSpaceImpulseDirection)
 {
     if (GetWorld() == nullptr)
     {
@@ -383,7 +451,9 @@ void UActionCombatReactionComponent::BeginTimedReaction(EActionCombatReactionSta
 
     GetWorld()->GetTimerManager().ClearTimer(ReactionTimerHandle);
     ActiveReactionState = NewState;
+    LastReactionImpulseDirection = WorldSpaceImpulseDirection;
     UpdateReactionTags();
+    StartReactionCue(NewState, WorldSpaceImpulseDirection);
     ApplyMovementLock(bDisableMovementDuringHitReaction);
     GetWorld()->GetTimerManager().SetTimer(ReactionTimerHandle, this, &ThisClass::HandleReactionTimerExpired, FMath::Max(DurationSeconds, 0.01f), false);
 }
@@ -398,7 +468,9 @@ void UActionCombatReactionComponent::BeginKnockdown(const FVector& WorldSpaceImp
     GetWorld()->GetTimerManager().ClearTimer(ReactionTimerHandle);
     ApplyMovementLock(false);
     ActiveReactionState = EActionCombatReactionState::Knockdown;
+    LastReactionImpulseDirection = WorldSpaceImpulseDirection;
     UpdateReactionTags();
+    StartReactionCue(EActionCombatReactionState::Knockdown, WorldSpaceImpulseDirection);
     ApplyKnockdownLaunch(WorldSpaceImpulseDirection);
     GetWorld()->GetTimerManager().SetTimer(ReactionTimerHandle, this, &ThisClass::HandleReactionTimerExpired, FMath::Max(KnockdownDurationSeconds, 0.01f), false);
 }
@@ -413,6 +485,7 @@ void UActionCombatReactionComponent::BeginGetUp()
     GetWorld()->GetTimerManager().ClearTimer(ReactionTimerHandle);
     ActiveReactionState = EActionCombatReactionState::GetUp;
     UpdateReactionTags();
+    StartReactionCue(EActionCombatReactionState::GetUp, LastReactionImpulseDirection);
     ApplyMovementLock(bDisableMovementDuringHitReaction);
     GetWorld()->GetTimerManager().SetTimer(ReactionTimerHandle, this, &ThisClass::HandleReactionTimerExpired, FMath::Max(GetUpDurationSeconds, 0.01f), false);
 }
@@ -514,6 +587,127 @@ void UActionCombatReactionComponent::ApplyKnockdownLaunch(const FVector& WorldSp
         + FVector(0.0f, 0.0f, FMath::Max(KnockdownUpwardLaunchSpeed, 0.0f));
 
     Character->LaunchCharacter(LaunchVelocity, true, true);
+}
+
+void UActionCombatReactionComponent::StartReactionCue(EActionCombatReactionState NewState, const FVector& WorldSpaceImpulseDirection)
+{
+    if (!bAutoPlayReactionAnimations)
+    {
+        return;
+    }
+
+    ReplicatedReactionCueState = NewState;
+    ReplicatedReactionCueDirection = WorldSpaceImpulseDirection.GetSafeNormal2D();
+    ++ReplicatedReactionCueId;
+    LastPlayedReactionCueId = ReplicatedReactionCueId;
+    PlayReactionAnimation(NewState, ReplicatedReactionCueDirection);
+}
+
+void UActionCombatReactionComponent::PlayReactionAnimation(EActionCombatReactionState ReactionState, const FVector& WorldSpaceImpulseDirection)
+{
+    if (!bAutoPlayReactionAnimations || ReactionSlotName.IsNone())
+    {
+        return;
+    }
+
+    USkeletalMeshComponent* MeshComponent = ResolveAnimationMesh();
+    UAnimInstance* AnimInstance = MeshComponent ? MeshComponent->GetAnimInstance() : nullptr;
+    if (AnimInstance == nullptr)
+    {
+        return;
+    }
+
+    if (bStopPreviousReactionAnimation && ActiveReactionMontage)
+    {
+        AnimInstance->Montage_Stop(0.03f, ActiveReactionMontage);
+        ActiveReactionMontage = nullptr;
+    }
+
+    const EActionCombatReactionDirection Direction = ResolveReactionDirection(WorldSpaceImpulseDirection);
+    const FActionCombatReactionAnimation* ReactionAnimation = FindReactionAnimation(ReactionState, Direction);
+    if ((ReactionAnimation == nullptr) || !ReactionAnimation->HasAnimation())
+    {
+        return;
+    }
+
+    UAnimMontage* Montage = ReactionAnimation->Montage.LoadSynchronous();
+    if (Montage)
+    {
+        if (AnimInstance->Montage_Play(Montage, FMath::Max(ReactionAnimation->PlayRate, 0.01f)) > 0.0f)
+        {
+            ActiveReactionMontage = Montage;
+        }
+        return;
+    }
+
+    UAnimSequenceBase* Sequence = ReactionAnimation->Sequence.LoadSynchronous();
+    if (Sequence)
+    {
+        ActiveReactionMontage = AnimInstance->PlaySlotAnimationAsDynamicMontage(
+            Sequence,
+            ReactionSlotName,
+            FMath::Max(ReactionAnimation->BlendInSeconds, 0.0f),
+            FMath::Max(ReactionAnimation->BlendOutSeconds, 0.0f),
+            FMath::Max(ReactionAnimation->PlayRate, 0.01f));
+    }
+}
+
+const FActionCombatReactionAnimation* UActionCombatReactionComponent::FindReactionAnimation(EActionCombatReactionState ReactionState, EActionCombatReactionDirection Direction) const
+{
+    switch (ReactionState)
+    {
+    case EActionCombatReactionState::LightHit:
+        return LightHitAnimations.FindAnimation(Direction);
+    case EActionCombatReactionState::HeavyHit:
+        return HeavyHitAnimations.FindAnimation(Direction);
+    case EActionCombatReactionState::Knockdown:
+        return KnockdownAnimation.HasAnimation() ? &KnockdownAnimation : HeavyHitAnimations.FindAnimation(Direction);
+    case EActionCombatReactionState::GetUp:
+        return GetUpAnimation.HasAnimation() ? &GetUpAnimation : nullptr;
+    default:
+        return nullptr;
+    }
+}
+
+EActionCombatReactionDirection UActionCombatReactionComponent::ResolveReactionDirection(const FVector& WorldSpaceImpulseDirection) const
+{
+    const AActor* Owner = GetOwner();
+    if (Owner == nullptr)
+    {
+        return EActionCombatReactionDirection::Front;
+    }
+
+    const FVector LocalDirection = Owner->GetActorTransform().InverseTransformVectorNoScale(WorldSpaceImpulseDirection.GetSafeNormal2D());
+    if (FMath::Abs(LocalDirection.X) >= FMath::Abs(LocalDirection.Y))
+    {
+        return LocalDirection.X < 0.0f ? EActionCombatReactionDirection::Front : EActionCombatReactionDirection::Back;
+    }
+
+    return LocalDirection.Y < 0.0f ? EActionCombatReactionDirection::Right : EActionCombatReactionDirection::Left;
+}
+
+USkeletalMeshComponent* UActionCombatReactionComponent::ResolveAnimationMesh() const
+{
+    AActor* Owner = GetOwner();
+    if (Owner == nullptr)
+    {
+        return nullptr;
+    }
+
+    TArray<USkeletalMeshComponent*> SkeletalMeshes;
+    Owner->GetComponents(SkeletalMeshes);
+    return SkeletalMeshes.Num() > 0 ? SkeletalMeshes[0] : nullptr;
+}
+
+void UActionCombatReactionComponent::OnRep_ReplicatedReactionCue()
+{
+    if (HasReactionAuthority() || LastPlayedReactionCueId == ReplicatedReactionCueId)
+    {
+        return;
+    }
+
+    LastPlayedReactionCueId = ReplicatedReactionCueId;
+    PlayReactionAnimation(ReplicatedReactionCueState, ReplicatedReactionCueDirection);
 }
 
 double UActionCombatReactionComponent::GetCurrentWorldTimeSeconds() const
