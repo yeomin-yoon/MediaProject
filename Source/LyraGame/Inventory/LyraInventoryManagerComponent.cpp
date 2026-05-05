@@ -13,6 +13,7 @@
 #include "GameFramework/PlayerState.h"
 #include "Net/UnrealNetwork.h"
 #include "Yeomin/Inventory/InventoryFragment_EquipEffect.h"
+#include "Yeomin/Inventory/InventorySaveSubsystem.h"
 
 #include UE_INLINE_GENERATED_CPP_BY_NAME(LyraInventoryManagerComponent)
 
@@ -99,7 +100,10 @@ ULyraInventoryItemInstance* FLyraInventoryList::AddEntry(
 	// ======================================
 	// 🔥 랜덤 생성 (딱 1번)
 	// ======================================
-	NewEntry.Instance->RandomSeed = FMath::Rand();
+	if (NewEntry.Instance->RandomSeed == 0)
+	{
+		NewEntry.Instance->RandomSeed = FMath::Rand();
+	}
 	NewEntry.Instance->RandomValue = FMath::FRand();
 
 	NewEntry.StackCount = StackCount;
@@ -594,6 +598,100 @@ void ULyraInventoryManagerComponent::RemoveEquipEffect(
 	}
 
 	ActiveGEMap.Remove(Item);
+}
+
+FInventorySaveData ULyraInventoryManagerComponent::MakeSaveData() const
+{
+	FInventorySaveData SaveData;
+
+	for (const FLyraInventoryEntry& Entry : InventoryList.Entries)
+	{
+		if (!Entry.Instance) continue;
+
+		FInventoryEntrySave Data;
+
+		Data.ItemDef = Entry.Instance->GetItemDef();
+		Data.StackCount = Entry.StackCount;
+		Data.EquipSlotIndex = INDEX_NONE;
+
+		// 🔥 랜덤값 저장
+		Data.RandomSeed = Entry.Instance->RandomSeed;
+
+		// Equip 슬롯 저장
+		for (int32 i = 0; i < EquipSlots.Num(); ++i)
+		{
+			if (EquipSlots[i] == Entry.Instance)
+			{
+				Data.EquipSlotIndex = i;
+				break;
+			}
+		}
+
+		SaveData.Items.Add(Data);
+	}
+
+	return SaveData;
+}
+
+void ULyraInventoryManagerComponent::LoadFromSaveData(const FInventorySaveData& SaveData)
+{
+	AActor* Owner = GetOwner();
+	if (!Owner) return;
+
+	APlayerController* PC = Cast<APlayerController>(Owner);
+	APlayerState* PS = PC ? PC->GetPlayerState<APlayerState>() : nullptr;
+	if (!PS) return;
+
+	UAbilitySystemComponent* ASC = PS->FindComponentByClass<UAbilitySystemComponent>();
+
+	// 1. GE 제거
+	if (ASC)
+	{
+		for (auto It = ActiveGEMap.CreateIterator(); It; ++It)
+		{
+			if (It.Value().IsValid())
+			{
+				ASC->RemoveActiveGameplayEffect(It.Value());
+			}
+		}
+	}
+
+	ActiveGEMap.Empty();
+	InventoryList.Entries.Empty();
+	InventoryList.MarkArrayDirty();
+	EquipSlots.SetNum(3);
+
+	TMap<int32, ULyraInventoryItemInstance*> IndexToInstance;
+
+	// 2. 생성 (🔥 Seed 복원 핵심)
+	for (int32 i = 0; i < SaveData.Items.Num(); ++i)
+	{
+		const FInventoryEntrySave& Data = SaveData.Items[i];
+
+		if (!Data.ItemDef) continue;
+
+		ULyraInventoryItemInstance* NewItem =
+			AddItemDefinition(Data.ItemDef, Data.StackCount);
+
+		// 🔥 핵심: 저장된 Seed 복원
+		NewItem->RandomSeed = Data.RandomSeed;
+
+		IndexToInstance.Add(i, NewItem);
+	}
+
+	// 3. Equip 복구
+	for (int32 i = 0; i < SaveData.Items.Num(); ++i)
+	{
+		const FInventoryEntrySave& Data = SaveData.Items[i];
+
+		if (Data.EquipSlotIndex != INDEX_NONE)
+		{
+			if (ULyraInventoryItemInstance** Found = IndexToInstance.Find(i))
+			{
+				EquipFromInventory(Data.EquipSlotIndex, *Found);
+			}
+		}
+	}
 }
 
 //////////////////////////////////////////////////////////////////////

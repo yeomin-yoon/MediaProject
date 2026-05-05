@@ -38,8 +38,7 @@ void UInventoryTileUI::NativeOnDragDetected(
 		return;
 
 	UInventoryDragDrop* DragOp = NewObject<UInventoryDragDrop>();
-
-	// 👉 index 삭제, 무조건 pointer
+	
 	DragOp->Item = ItemInstance;
 
 	UInventoryTileUI* DragVisual =

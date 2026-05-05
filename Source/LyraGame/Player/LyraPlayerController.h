@@ -135,6 +135,10 @@ private:
 	void BroadcastOnPlayerStateChanged();
 	void PushLocalLobbyLoadoutToServer();
 	void MarkLobbyReadyAndMaybeTravelToExperience(const ULyraUserFacingExperienceDefinition* UserFacingExperience);
+public:
+	void SaveInventoryBeforeTravel();
+	void LoadInventoryAfterTravel();
+protected:
 	void TravelConnectedLobbyToExperience(const ULyraUserFacingExperienceDefinition* UserFacingExperience);
 
 protected:

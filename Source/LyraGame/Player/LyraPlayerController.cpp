@@ -35,6 +35,9 @@
 #include "HttpServerModule.h"
 #endif
 
+#include "Inventory/LyraInventoryManagerComponent.h"
+#include "Yeomin/Inventory/InventorySaveSubsystem.h"
+
 #include UE_INLINE_GENERATED_CPP_BY_NAME(LyraPlayerController)
 
 namespace Lyra
@@ -289,8 +292,79 @@ void ALyraPlayerController::MarkLobbyReadyAndMaybeTravelToExperience(const ULyra
 	TravelConnectedLobbyToExperience(UserFacingExperience);
 }
 
+// LyraPlayerController.cpp
+
+void ALyraPlayerController::SaveInventoryBeforeTravel()
+{
+	if (!HasAuthority())
+	{
+		UE_LOG(LogTemp, Warning, TEXT("Save skipped (Not Authority)"));
+		return;
+	}
+
+	UE_LOG(LogTemp, Warning, TEXT("=== SaveInventoryBeforeTravel START ==="));
+
+	UInventorySaveSubsystem* SaveSys =
+		GetGameInstance()->GetSubsystem<UInventorySaveSubsystem>();
+
+	if (!SaveSys)
+	{
+		UE_LOG(LogTemp, Error, TEXT("SaveSys NULL"));
+		return;
+	}
+
+	ULyraInventoryManagerComponent* Inv =
+		FindComponentByClass<ULyraInventoryManagerComponent>();
+
+	if (!Inv)
+	{
+		UE_LOG(LogTemp, Error, TEXT("InventoryComponent NULL"));
+		return;
+	}
+
+	FInventorySaveData Data = Inv->MakeSaveData();
+
+	FString PlayerId = "LocalPlayer";
+
+	SaveSys->SetInventory(PlayerId, Data);
+
+	UE_LOG(LogTemp, Warning, TEXT("Saved Inventory: %s"), *PlayerId);
+}
+
+void ALyraPlayerController::LoadInventoryAfterTravel()
+{
+	UInventorySaveSubsystem* SaveSys =
+		GetGameInstance()->GetSubsystem<UInventorySaveSubsystem>();
+		
+	UE_LOG(LogTemp, Warning, TEXT("[LOAD] SaveSys Ptr: %p"), SaveSys);
+
+	if (!SaveSys) return;
+
+	APlayerState* PS = GetPlayerState<APlayerState>();
+	if (!PS) return;
+
+	FString PlayerId = "LocalPlayer";
+
+	FInventorySaveData Data;
+	if (!SaveSys->GetInventory(PlayerId, Data))
+	{
+		UE_LOG(LogTemp, Warning, TEXT("Load Failed: %s"), *PlayerId);
+		return;
+	}
+
+	ULyraInventoryManagerComponent* Inv =
+		FindComponentByClass<ULyraInventoryManagerComponent>();
+
+	if (!Inv) return;
+
+	Inv->LoadFromSaveData(Data);
+
+	UE_LOG(LogTemp, Warning, TEXT("Loaded Inventory: %s"), *PlayerId);
+}
+
 void ALyraPlayerController::TravelConnectedLobbyToExperience(const ULyraUserFacingExperienceDefinition* UserFacingExperience)
 {
+	UE_LOG(LogTemp, Warning, TEXT("=== ServerTravel START ==="));
 	if (!HasAuthority() || !UserFacingExperience)
 	{
 		return;
@@ -557,6 +631,18 @@ void ALyraPlayerController::OnPossess(APawn* InPawn)
 #endif
 
 	SetIsAutoRunning(false);
+	
+	// =========================
+	// Inventory Load (SAFE)
+	// =========================
+	FTimerHandle TimerHandle;
+	GetWorld()->GetTimerManager().SetTimer(
+		TimerHandle,
+		this,
+		&ALyraPlayerController::LoadInventoryAfterTravel,
+		0.1f,
+		false
+	);
 }
 
 void ALyraPlayerController::SetIsAutoRunning(const bool bEnabled)
