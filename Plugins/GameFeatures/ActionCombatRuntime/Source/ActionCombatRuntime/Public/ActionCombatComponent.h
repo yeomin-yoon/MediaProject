@@ -235,7 +235,7 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Action Combat|Runtime")
     void InterruptActiveAction();
 
-    void BroadcastReactionCueForActor(AActor* ReactionActor, EActionCombatReactionState NewState, FVector_NetQuantizeNormal WorldSpaceImpulseDirection, int32 CueId);
+    void BroadcastReactionCueForActor(AActor* ReactionActor, EActionCombatReactionState NewState, FVector_NetQuantizeNormal WorldSpaceImpulseDirection, FVector_NetQuantize WorldSpaceActorLocation, int32 CueId);
 
     UFUNCTION(BlueprintCallable, Category = "Action Combat|Debug")
     bool StartActionFromTag(FGameplayTag ActionTag);
@@ -291,7 +291,7 @@ private:
     void OnRep_ReplicatedState();
 
     UFUNCTION(NetMulticast, Reliable)
-    void MulticastPlayReactionCueForActor(AActor* ReactionActor, EActionCombatReactionState NewState, FVector_NetQuantizeNormal WorldSpaceImpulseDirection, int32 CueId);
+    void MulticastPlayReactionCueForActor(AActor* ReactionActor, EActionCombatReactionState NewState, FVector_NetQuantizeNormal WorldSpaceImpulseDirection, FVector_NetQuantize WorldSpaceActorLocation, int32 CueId);
 
     bool HasRuntimeAuthority() const;
     bool HandleCommandRequestInternal(const FActionCombatBufferedCommandState& CommandRequest);

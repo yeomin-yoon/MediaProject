@@ -7,6 +7,7 @@
 #include "ActionCombatReactionComponent.generated.h"
 
 class AActor;
+class UAnimInstance;
 class UAbilitySystemComponent;
 class UAnimMontage;
 class UAnimSequenceBase;
@@ -147,7 +148,7 @@ public:
     static UActionCombatReactionComponent* FindReactionComponent(const AActor* Actor);
 
     static UActionCombatReactionComponent* FindOrCreateReactionComponent(AActor* Actor);
-    static void PlayReactionCueOnActor(AActor* Actor, EActionCombatReactionState NewState, FVector_NetQuantizeNormal WorldSpaceImpulseDirection, int32 CueId);
+    static void PlayReactionCueOnActor(AActor* Actor, EActionCombatReactionState NewState, FVector_NetQuantizeNormal WorldSpaceImpulseDirection, FVector_NetQuantize WorldSpaceActorLocation, int32 CueId);
 
     UFUNCTION(BlueprintPure, Category = "Action Combat|Reaction")
     bool HasReactionAuthority() const;
@@ -159,7 +160,7 @@ public:
     bool IsInReactionState() const;
 
     bool TryApplyReactionHit(const FActionCombatReactionHit& IncomingHit, FActionCombatReactionResult& OutResult);
-    void PlayReplicatedReactionCue(EActionCombatReactionState NewState, FVector_NetQuantizeNormal WorldSpaceImpulseDirection, int32 CueId);
+    void PlayReplicatedReactionCue(EActionCombatReactionState NewState, FVector_NetQuantizeNormal WorldSpaceImpulseDirection, FVector_NetQuantize WorldSpaceActorLocation, int32 CueId);
 
 protected:
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Action Combat|Reaction", meta = (ClampMin = "0.0"))
@@ -204,6 +205,12 @@ protected:
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Action Combat|Reaction", meta = (ClampMin = "0.0"))
     float KnockdownUpwardLaunchSpeed = 0.0f;
 
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Action Combat|Reaction", meta = (ClampMin = "0.0"))
+    float KnockdownActorDisplacementDistance = 320.0f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Action Combat|Reaction", meta = (ClampMin = "0.01"))
+    float KnockdownActorDisplacementDurationSeconds = 0.85f;
+
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Action Combat|Reaction")
     bool bInterruptCombatActionsOnReaction = true;
 
@@ -218,6 +225,18 @@ protected:
 
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Action Combat|Reaction|Animation")
     bool bStopPreviousReactionAnimation = true;
+
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Action Combat|Reaction|Animation")
+    bool bHoldKnockdownPoseUntilGetUp = true;
+
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Action Combat|Reaction|Animation", meta = (ClampMin = "0.0"))
+    float KnockdownPoseHoldLeadSeconds = 0.02f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Action Combat|Reaction|Animation", meta = (ClampMin = "0.0"))
+    float GetUpHoldReleaseDelaySeconds = 0.08f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Action Combat|Reaction|Animation")
+    bool bSnapClientToServerReactionLocation = true;
 
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Action Combat|Reaction|Animation")
     FActionCombatDirectionalReactionAnimations LightHitAnimations;
@@ -250,33 +269,52 @@ private:
     bool InterruptCombatAction() const;
     void ApplyMovementLock(bool bLockMovement);
     void ApplyKnockdownLaunch(const FVector& WorldSpaceImpulseDirection);
+    void StartKnockdownActorDisplacement(const FVector& WorldSpaceImpulseDirection, float DurationSeconds);
+    void TickKnockdownActorDisplacement(float DeltaTime);
+    void ClearKnockdownActorDisplacement();
     void StartReactionCue(EActionCombatReactionState NewState, const FVector& WorldSpaceImpulseDirection);
     void PlayReactionAnimation(EActionCombatReactionState ReactionState, const FVector& WorldSpaceImpulseDirection);
+    void ClearKnockdownPoseHold(bool bStopHeldMontage);
+    void ClearKnockdownPoseHoldDeferred();
+    void ScheduleKnockdownPoseHold(UAnimInstance* AnimInstance, UAnimMontage* KnockdownMontage, float PlayRate);
+    void HoldKnockdownPose();
+    void ApplyReplicatedReactionLocation(EActionCombatReactionState NewState, const FVector& WorldSpaceActorLocation);
     const FActionCombatReactionAnimation* FindReactionAnimation(EActionCombatReactionState ReactionState, EActionCombatReactionDirection Direction) const;
     EActionCombatReactionDirection ResolveReactionDirection(const FVector& WorldSpaceImpulseDirection) const;
     USkeletalMeshComponent* ResolveAnimationMesh(const FActionCombatReactionAnimation* ReactionAnimation) const;
     bool IsAnimationCompatibleWithMesh(const USkeletalMeshComponent* MeshComponent, const FActionCombatReactionAnimation* ReactionAnimation) const;
+    float GetReactionAnimationPlayLengthSeconds(EActionCombatReactionState ReactionState, const FVector& WorldSpaceImpulseDirection, float FallbackSeconds) const;
     double GetCurrentWorldTimeSeconds() const;
 
     UFUNCTION()
     void OnRep_ReplicatedReactionCue();
 
     UFUNCTION(NetMulticast, Reliable)
-    void MulticastPlayReactionCue(EActionCombatReactionState NewState, FVector_NetQuantizeNormal WorldSpaceImpulseDirection, int32 CueId);
+    void MulticastPlayReactionCue(EActionCombatReactionState NewState, FVector_NetQuantizeNormal WorldSpaceImpulseDirection, FVector_NetQuantize WorldSpaceActorLocation, int32 CueId);
 
     mutable TWeakObjectPtr<UActionCombatReactionSet> CachedReactionSet;
     FTimerHandle ReactionTimerHandle;
+    FTimerHandle KnockdownPoseHoldTimerHandle;
+    FTimerHandle KnockdownPoseHoldClearTimerHandle;
     UPROPERTY(Transient)
     TObjectPtr<UAnimMontage> ActiveReactionMontage;
+    UPROPERTY(Transient)
+    TObjectPtr<UAnimMontage> HeldKnockdownMontage;
+    TWeakObjectPtr<UAnimInstance> ActiveReactionAnimInstance;
     UPROPERTY(Replicated)
     EActionCombatReactionState ReplicatedReactionCueState = EActionCombatReactionState::None;
     UPROPERTY(Replicated)
     FVector_NetQuantizeNormal ReplicatedReactionCueDirection = FVector::ZeroVector;
+    UPROPERTY(Replicated)
+    FVector_NetQuantize ReplicatedReactionCueLocation = FVector::ZeroVector;
     UPROPERTY(ReplicatedUsing = OnRep_ReplicatedReactionCue)
     int32 ReplicatedReactionCueId = 0;
     TEnumAsByte<EMovementMode> SavedMovementMode = MOVE_Walking;
     uint8 SavedCustomMovementMode = 0;
     FVector LastReactionImpulseDirection = FVector::ZeroVector;
+    FVector KnockdownActorDisplacementDirection = FVector::ZeroVector;
+    float KnockdownActorDisplacementRemainingDistance = 0.0f;
+    float KnockdownActorDisplacementSpeed = 0.0f;
     TWeakObjectPtr<AActor> LastReactionInstigatorActor;
     int32 LastPlayedReactionCueId = 0;
     double LastIncomingHitWorldTimeSeconds = -1.0;
