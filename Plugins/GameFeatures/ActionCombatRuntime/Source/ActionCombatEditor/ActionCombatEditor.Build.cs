@@ -20,6 +20,8 @@ public class ActionCombatEditor : ModuleRules
             {
                 "AssetTools",
                 "EditorFramework",
+                "GameplayTags",
+                "GraphEditor",
                 "InputCore",
                 "PropertyEditor",
                 "Slate",
