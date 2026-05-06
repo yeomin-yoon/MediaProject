@@ -206,10 +206,13 @@ protected:
     float KnockdownUpwardLaunchSpeed = 0.0f;
 
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Action Combat|Reaction", meta = (ClampMin = "0.0"))
-    float KnockdownActorDisplacementDistance = 320.0f;
+    float KnockdownActorDisplacementDistance = 280.0f;
 
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Action Combat|Reaction", meta = (ClampMin = "0.01"))
     float KnockdownActorDisplacementDurationSeconds = 0.85f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Action Combat|Reaction")
+    bool bFaceReactionSourceOnKnockdown = true;
 
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Action Combat|Reaction")
     bool bInterruptCombatActionsOnReaction = true;
@@ -268,6 +271,7 @@ private:
     void HandleReactionTimerExpired();
     bool InterruptCombatAction() const;
     void ApplyMovementLock(bool bLockMovement);
+    void ApplyReactionFacing(const FVector& WorldSpaceImpulseDirection);
     void ApplyKnockdownLaunch(const FVector& WorldSpaceImpulseDirection);
     void StartKnockdownActorDisplacement(const FVector& WorldSpaceImpulseDirection, float DurationSeconds);
     void TickKnockdownActorDisplacement(float DeltaTime);

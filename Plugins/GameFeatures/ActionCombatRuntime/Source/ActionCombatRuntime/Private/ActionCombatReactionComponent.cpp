@@ -15,6 +15,7 @@
 #include "GameFramework/Actor.h"
 #include "GameFramework/Character.h"
 #include "GameFramework/CharacterMovementComponent.h"
+#include "GameFramework/Controller.h"
 #include "Engine/SkeletalMesh.h"
 #include "Net/UnrealNetwork.h"
 #include "TimerManager.h"
@@ -79,7 +80,7 @@ UActionCombatReactionComponent::UActionCombatReactionComponent(const FObjectInit
     HeavyHitAnimations.Left.Montage = TSoftObjectPtr<UAnimMontage>(FSoftObjectPath(TEXT("/Game/Characters/Heroes/Mannequin/Animations/Actions/AM_MM_HitReact_Left_Med_01.AM_MM_HitReact_Left_Med_01")));
     HeavyHitAnimations.Right.Montage = TSoftObjectPtr<UAnimMontage>(FSoftObjectPath(TEXT("/Game/Characters/Heroes/Mannequin/Animations/Actions/AM_MM_HitReact_Right_Med_01.AM_MM_HitReact_Right_Med_01")));
 
-    KnockdownAnimation.Sequence = TSoftObjectPtr<UAnimSequenceBase>(FSoftObjectPath(TEXT("/Game/1dev/OS/QuaterniusUAL2/Retargeted/Manny/Manny_Hit_Knockback_RM.Manny_Hit_Knockback_RM")));
+    KnockdownAnimation.Sequence = TSoftObjectPtr<UAnimSequenceBase>(FSoftObjectPath(TEXT("/Game/1dev/OS/QuaterniusUAL2/Retargeted/Manny/Manny_Hit_Knockback.Manny_Hit_Knockback")));
     KnockdownAnimation.BlendInSeconds = 0.08f;
     KnockdownAnimation.BlendOutSeconds = 0.0f;
 
@@ -547,6 +548,7 @@ void UActionCombatReactionComponent::BeginKnockdown(const FVector& WorldSpaceImp
     ApplyMovementLock(bDisableMovementDuringHitReaction);
     ActiveReactionState = EActionCombatReactionState::Knockdown;
     LastReactionImpulseDirection = WorldSpaceImpulseDirection;
+    ApplyReactionFacing(WorldSpaceImpulseDirection);
     UpdateReactionTags();
     StartReactionCue(EActionCombatReactionState::Knockdown, WorldSpaceImpulseDirection);
     ApplyKnockdownLaunch(WorldSpaceImpulseDirection);
@@ -574,6 +576,7 @@ void UActionCombatReactionComponent::BeginGetUp()
     }
 
     ActiveReactionState = EActionCombatReactionState::GetUp;
+    ApplyReactionFacing(LastReactionImpulseDirection);
     UpdateReactionTags();
     StartReactionCue(EActionCombatReactionState::GetUp, LastReactionImpulseDirection);
     ApplyMovementLock(bDisableMovementDuringHitReaction);
@@ -659,6 +662,50 @@ void UActionCombatReactionComponent::ApplyMovementLock(bool bLockMovement)
         CharacterMovement->SetMovementMode(RestoredMovementMode, SavedCustomMovementMode);
         bMovementLocked = false;
     }
+}
+
+void UActionCombatReactionComponent::ApplyReactionFacing(const FVector& WorldSpaceImpulseDirection)
+{
+    if (!bFaceReactionSourceOnKnockdown)
+    {
+        return;
+    }
+
+    AActor* Owner = GetOwner();
+    if (Owner == nullptr)
+    {
+        return;
+    }
+
+    FVector FacingDirection = -WorldSpaceImpulseDirection.GetSafeNormal2D();
+    if (FacingDirection.IsNearlyZero())
+    {
+        if (AActor* InstigatorActor = LastReactionInstigatorActor.Get())
+        {
+            FacingDirection = (InstigatorActor->GetActorLocation() - Owner->GetActorLocation()).GetSafeNormal2D();
+        }
+    }
+
+    if (FacingDirection.IsNearlyZero())
+    {
+        return;
+    }
+
+    const FRotator DesiredRotation(0.0f, FacingDirection.Rotation().Yaw, 0.0f);
+    if (ACharacter* Character = Cast<ACharacter>(Owner))
+    {
+        if (AController* Controller = Character->GetController())
+        {
+            FRotator ControlRotation = Controller->GetControlRotation();
+            ControlRotation.Yaw = DesiredRotation.Yaw;
+            Controller->SetControlRotation(ControlRotation);
+        }
+
+        Character->FaceRotation(DesiredRotation, 0.0f);
+    }
+
+    Owner->SetActorRotation(DesiredRotation, ETeleportType::TeleportPhysics);
+    Owner->ForceNetUpdate();
 }
 
 void UActionCombatReactionComponent::ApplyKnockdownLaunch(const FVector& WorldSpaceImpulseDirection)
@@ -1206,6 +1253,11 @@ void UActionCombatReactionComponent::PlayReplicatedReactionCue(EActionCombatReac
     }
 
     LastPlayedReactionCueId = CueId;
+    if ((NewState == EActionCombatReactionState::Knockdown) || (NewState == EActionCombatReactionState::GetUp))
+    {
+        ApplyReactionFacing(WorldSpaceImpulseDirection);
+    }
+
     if ((NewState == EActionCombatReactionState::Knockdown) && !HasReactionAuthority())
     {
         const float KnockdownAnimationSeconds = GetReactionAnimationPlayLengthSeconds(EActionCombatReactionState::Knockdown, WorldSpaceImpulseDirection, KnockdownActorDisplacementDurationSeconds);
