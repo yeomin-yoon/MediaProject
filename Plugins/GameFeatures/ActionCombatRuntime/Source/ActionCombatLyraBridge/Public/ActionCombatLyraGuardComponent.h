@@ -195,6 +195,9 @@ protected:
     bool bInterruptCombatActionsOnGuardBreak = true;
 
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Action Combat|Guard")
+    bool bBlockGuardStartDuringCombatAction = true;
+
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Action Combat|Guard")
     bool bLogGuardFlow = true;
 
 private:
@@ -217,6 +220,7 @@ private:
     void UpdateGuardGameplayTags();
     void DispatchGuardGameplayEvent(const FGameplayTag& EventTag, const FActionCombatLyraIncomingGuardHit& IncomingHit, const FActionCombatLyraGuardResult& GuardResult);
     void InterruptCombatActionIfNeeded();
+    bool IsCombatActionActive() const;
     bool HasGuardAuthority() const;
     float ResolveGuardDuration(float RequestedDurationSeconds, float DefaultDurationSeconds) const;
     float ComputeFacingDot(const FActionCombatLyraIncomingGuardHit& IncomingHit) const;

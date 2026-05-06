@@ -384,6 +384,18 @@ void ULyraHeroComponent::Input_Move(const FInputActionValue& InputActionValue)
 	
 	if (Controller)
 	{
+		if (const ULyraPawnExtensionComponent* PawnExtComp = ULyraPawnExtensionComponent::FindPawnExtensionComponent(Pawn))
+		{
+			if (const ULyraAbilitySystemComponent* LyraASC = PawnExtComp->GetLyraAbilitySystemComponent())
+			{
+				const FGameplayTag ActionMovementBlockTag = FGameplayTag::RequestGameplayTag(TEXT("Combat.State.Action"), false);
+				if (ActionMovementBlockTag.IsValid() && LyraASC->HasMatchingGameplayTag(ActionMovementBlockTag))
+				{
+					return;
+				}
+			}
+		}
+
 		const FVector2D Value = InputActionValue.Get<FVector2D>();
 		const FRotator MovementRotation(0.0f, Controller->GetControlRotation().Yaw, 0.0f);
 

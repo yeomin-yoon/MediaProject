@@ -4,6 +4,7 @@
 #include "Engine/EngineTypes.h"
 #include "GameplayTagContainer.h"
 
+#include "ActionCombatReactionComponent.h"
 #include "ActionCombatStyleData.h"
 #include "ActionCombatComponent.generated.h"
 
@@ -234,6 +235,8 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Action Combat|Runtime")
     void InterruptActiveAction();
 
+    void BroadcastReactionCueForActor(AActor* ReactionActor, EActionCombatReactionState NewState, FVector_NetQuantizeNormal WorldSpaceImpulseDirection, int32 CueId);
+
     UFUNCTION(BlueprintCallable, Category = "Action Combat|Debug")
     bool StartActionFromTag(FGameplayTag ActionTag);
 
@@ -286,6 +289,9 @@ private:
 
     UFUNCTION()
     void OnRep_ReplicatedState();
+
+    UFUNCTION(NetMulticast, Reliable)
+    void MulticastPlayReactionCueForActor(AActor* ReactionActor, EActionCombatReactionState NewState, FVector_NetQuantizeNormal WorldSpaceImpulseDirection, int32 CueId);
 
     bool HasRuntimeAuthority() const;
     bool HandleCommandRequestInternal(const FActionCombatBufferedCommandState& CommandRequest);

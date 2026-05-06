@@ -23,7 +23,8 @@ public class ActionCombatLyraBridge : ModuleRules
         PrivateDependencyModuleNames.AddRange(
             new string[]
             {
-                "EnhancedInput"
+                "EnhancedInput",
+                "LockOnSystemRuntime"
             });
     }
 }

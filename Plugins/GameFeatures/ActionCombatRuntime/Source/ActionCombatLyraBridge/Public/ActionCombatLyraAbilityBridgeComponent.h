@@ -12,8 +12,10 @@
 class APawn;
 class UGameplayAbility;
 class UActionCombatComponent;
+class ULockOnComponent;
 class ULyraPawnExtensionComponent;
 class ULyraAbilitySystemComponent;
+class UActionCombatStaminaSet;
 
 USTRUCT(BlueprintType)
 struct ACTIONCOMBATLYRABRIDGE_API FActionCombatLyraActionEventBinding
@@ -40,6 +42,7 @@ public:
 
     virtual void BeginPlay() override;
     virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
+    virtual void TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction) override;
 
     UFUNCTION(BlueprintCallable, Category = "Action Combat|Lyra Bridge")
     void RefreshCombatBinding();
@@ -99,13 +102,41 @@ protected:
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Action Combat|Dash Dodge", meta = (Categories = "InputTag"))
     FGameplayTag FallbackDashInputTag;
 
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Action Combat|Stamina")
+    bool bEnsureStaminaAttributeSet = true;
+
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Action Combat|Stamina")
+    bool bRegenerateStaminaOnAuthority = true;
+
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Action Combat|Stamina", meta = (ClampMin = "0.0"))
+    float StaminaRegenDelayAfterSpendSeconds = 1.0f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Action Combat|Facing")
+    bool bFaceLockOnTargetOnActionStart = true;
+
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Action Combat|Facing", meta = (ClampMin = "0.0"))
+    float ActionFacingTurnDurationSeconds = 0.08f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Action Combat|Facing", meta = (ClampMin = "0.0", ClampMax = "180.0"))
+    float MaxActionFacingYawDegrees = 120.0f;
+
 private:
     void BindPawnExtension();
     void TryBindCombatComponent();
     void UnbindCombatComponent();
     void BindLyraAbilitySystemComponent(ULyraAbilitySystemComponent* AbilitySystemComponent);
     void UnbindLyraAbilitySystemComponent();
+    void RefreshComponentTickEnabled();
+    bool ShouldTickForStaminaRegen() const;
+    void EnsureStaminaAttributeSetRegistered();
+    void RegenerateStamina(float DeltaTime);
+    void TryStartActionFacing();
+    void TickActionFacing(float DeltaTime);
+    void ClearActionFacing();
+    void ApplyFacingYaw(float NewYaw) const;
+    ULockOnComponent* ResolveLockOnComponent() const;
     void EnsureFallbackDashAbilityGranted();
+    void SetActionMovementBlockActive(bool bNewActive);
     bool HasObservedDashAbilitySpec(const ULyraAbilitySystemComponent& AbilitySystemComponent) const;
     void RefreshMirroredDashStateFromAbilitySystem();
     void SetMirroredDashStateActive(bool bNewDashStateActive);
@@ -141,10 +172,19 @@ private:
 
     TWeakObjectPtr<UActionCombatComponent> BoundCombatComponent;
     TWeakObjectPtr<ULyraAbilitySystemComponent> BoundAbilitySystemComponent;
+    UPROPERTY(Transient)
+    TObjectPtr<UActionCombatStaminaSet> OwnedStaminaSet = nullptr;
     FDelegateHandle DashAbilityTagChangedHandle;
     FDelegateHandle DashAbilityActivatedHandle;
     FDelegateHandle DashAbilityEndedHandle;
     bool bMirroredDashStateActive = false;
     bool bObservedDashAbilityTagActive = false;
     int32 ActiveObservedDashAbilityCount = 0;
+    float LastObservedStamina = 100.0f;
+    float LastStaminaSpendTimeSeconds = -1000.0f;
+    bool bActionFacingActive = false;
+    float ActionFacingStartYaw = 0.0f;
+    float ActionFacingTargetYaw = 0.0f;
+    float ActionFacingElapsedSeconds = 0.0f;
+    float ActiveActionFacingDurationSeconds = 0.0f;
 };
