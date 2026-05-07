@@ -28,6 +28,7 @@ private:
     TSharedRef<SDockTab> SpawnGraphTab(const class FSpawnTabArgs& Args);
     TSharedRef<SDockTab> SpawnDetailsTab(const class FSpawnTabArgs& Args);
     void HandleFinishedChangingProperties(const struct FPropertyChangedEvent& PropertyChangedEvent);
+    void HandleGraphEdited();
 
 private:
     static const FName GraphTabId;

@@ -290,6 +290,22 @@ void UActionCombatComponent::InterruptActiveAction()
     LogCommandFlow(TEXT("ActiveActionInterrupted"));
 }
 
+void UActionCombatComponent::BroadcastReactionCueForActor(AActor* ReactionActor, EActionCombatReactionState NewState, FVector_NetQuantizeNormal WorldSpaceImpulseDirection, FVector_NetQuantize WorldSpaceActorLocation, int32 CueId)
+{
+    const AActor* Owner = GetOwner();
+    if ((Owner == nullptr) || !Owner->HasAuthority() || (ReactionActor == nullptr))
+    {
+        return;
+    }
+
+    MulticastPlayReactionCueForActor(ReactionActor, NewState, WorldSpaceImpulseDirection, WorldSpaceActorLocation, CueId);
+}
+
+void UActionCombatComponent::MulticastPlayReactionCueForActor_Implementation(AActor* ReactionActor, EActionCombatReactionState NewState, FVector_NetQuantizeNormal WorldSpaceImpulseDirection, FVector_NetQuantize WorldSpaceActorLocation, int32 CueId)
+{
+    UActionCombatReactionComponent::PlayReactionCueOnActor(ReactionActor, NewState, WorldSpaceImpulseDirection, WorldSpaceActorLocation, CueId);
+}
+
 bool UActionCombatComponent::StartActionFromTag(FGameplayTag ActionTag)
 {
     if (!HasRuntimeAuthority())

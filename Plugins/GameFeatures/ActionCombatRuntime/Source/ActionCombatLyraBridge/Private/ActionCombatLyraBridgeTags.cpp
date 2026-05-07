@@ -3,6 +3,7 @@
 namespace ActionCombatLyraBridgeTags
 {
     UE_DEFINE_GAMEPLAY_TAG_COMMENT(Ability_Type_Action_Dash, "Ability.Type.Action.Dash", "Lyra dash ability is currently active.");
+    UE_DEFINE_GAMEPLAY_TAG_COMMENT(Combat_State_Action, "Combat.State.Action", "Owner is currently performing an ActionCombat attack/action and should not accept normal movement input.");
     UE_DEFINE_GAMEPLAY_TAG_COMMENT(Combat_State_Dodge, "Combat.State.Dodge", "Owner is currently performing a dash-based dodge.");
     UE_DEFINE_GAMEPLAY_TAG_COMMENT(Combat_State_Dodge_IFrame, "Combat.State.Dodge.IFrame", "Owner is inside the dash-based dodge invulnerability window.");
     UE_DEFINE_GAMEPLAY_TAG_COMMENT(Combat_State_Guard, "Combat.State.Guard", "Owner is currently in an active guard state.");

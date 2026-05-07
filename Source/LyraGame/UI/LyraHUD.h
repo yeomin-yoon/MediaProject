@@ -39,6 +39,19 @@ protected:
 	//~End of AActor interface
 
 	//~AHUD interface
+	virtual void DrawHUD() override;
 	virtual void GetDebugActorList(TArray<AActor*>& InOutList) override;
 	//~End of AHUD interface
+
+private:
+	bool ShouldUseActionCombatFallbackHUD() const;
+	void BindActionCombatFallbackInput();
+	void HandleFallbackEscapePressed();
+	void HandleFallbackQuitPressed();
+	void HandleFallbackResumePressed();
+	void DrawActionCombatFallbackHUD();
+	void DrawActionCombatBar(const FString& Label, float CurrentValue, float MaxValue, const FVector2D& Position, const FLinearColor& FillColor);
+	bool TryGetActionCombatStamina(float& OutStamina, float& OutMaxStamina) const;
+
+	bool bActionCombatFallbackMenuOpen = false;
 };

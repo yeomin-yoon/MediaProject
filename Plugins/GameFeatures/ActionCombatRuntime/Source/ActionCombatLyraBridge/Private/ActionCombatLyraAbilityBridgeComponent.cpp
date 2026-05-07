@@ -5,16 +5,19 @@
 #include "ActionCombatComponent.h"
 #include "ActionCombatMeleeTraceComponent.h"
 #include "ActionCombatRuntimeLog.h"
+#include "ActionCombatStaminaSet.h"
+#include "LockOnComponent.h"
 
 #include "Abilities/GameplayAbility.h"
 #include "AbilitySystem/LyraAbilitySystemComponent.h"
 #include "Character/LyraPawnExtensionComponent.h"
+#include "GameFramework/Controller.h"
 #include "GameFramework/Pawn.h"
 
 UActionCombatLyraAbilityBridgeComponent::UActionCombatLyraAbilityBridgeComponent(const FObjectInitializer& ObjectInitializer)
     : Super(ObjectInitializer)
 {
-    PrimaryComponentTick.bCanEverTick = false;
+    PrimaryComponentTick.bCanEverTick = true;
     PrimaryComponentTick.bStartWithTickEnabled = false;
     ObservedDashAbilityTag = ActionCombatLyraBridgeTags::Ability_Type_Action_Dash;
     GrantedDashStateTag = ActionCombatLyraBridgeTags::Combat_State_Dodge;
@@ -36,6 +39,13 @@ void UActionCombatLyraAbilityBridgeComponent::EndPlay(const EEndPlayReason::Type
     UnbindLyraAbilitySystemComponent();
     UnbindCombatComponent();
     Super::EndPlay(EndPlayReason);
+}
+
+void UActionCombatLyraAbilityBridgeComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction)
+{
+    Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
+    RegenerateStamina(DeltaTime);
+    TickActionFacing(DeltaTime);
 }
 
 void UActionCombatLyraAbilityBridgeComponent::RefreshCombatBinding()
@@ -97,6 +107,7 @@ void UActionCombatLyraAbilityBridgeComponent::BindLyraAbilitySystemComponent(ULy
     BoundAbilitySystemComponent = AbilitySystemComponent;
     bObservedDashAbilityTagActive = false;
     ActiveObservedDashAbilityCount = 0;
+    EnsureStaminaAttributeSetRegistered();
     EnsureFallbackDashAbilityGranted();
 
     const APawn* Pawn = ResolvePawnOwner();
@@ -142,9 +153,224 @@ void UActionCombatLyraAbilityBridgeComponent::UnbindLyraAbilitySystemComponent()
     }
 
     BoundAbilitySystemComponent.Reset();
+    OwnedStaminaSet = nullptr;
+    SetActionMovementBlockActive(false);
+    ClearActionFacing();
     bMirroredDashStateActive = false;
     bObservedDashAbilityTagActive = false;
     ActiveObservedDashAbilityCount = 0;
+    RefreshComponentTickEnabled();
+}
+
+void UActionCombatLyraAbilityBridgeComponent::RefreshComponentTickEnabled()
+{
+    SetComponentTickEnabled(ShouldTickForStaminaRegen() || bActionFacingActive);
+}
+
+bool UActionCombatLyraAbilityBridgeComponent::ShouldTickForStaminaRegen() const
+{
+    const APawn* Pawn = ResolvePawnOwner();
+    return bRegenerateStaminaOnAuthority && Pawn && Pawn->HasAuthority() && BoundAbilitySystemComponent.IsValid();
+}
+
+void UActionCombatLyraAbilityBridgeComponent::EnsureStaminaAttributeSetRegistered()
+{
+    if (!bEnsureStaminaAttributeSet)
+    {
+        return;
+    }
+
+    ULyraAbilitySystemComponent* AbilitySystemComponent = BoundAbilitySystemComponent.Get();
+    if (!AbilitySystemComponent)
+    {
+        return;
+    }
+
+    if (!AbilitySystemComponent->HasAttributeSetForAttribute(UActionCombatStaminaSet::GetStaminaAttribute()))
+    {
+        OwnedStaminaSet = NewObject<UActionCombatStaminaSet>(AbilitySystemComponent->GetOwner());
+        AbilitySystemComponent->AddAttributeSetSubobject(OwnedStaminaSet.Get());
+        LogBridge(TEXT("Added ActionCombat stamina attribute set to ASC."));
+    }
+    else
+    {
+        OwnedStaminaSet = const_cast<UActionCombatStaminaSet*>(AbilitySystemComponent->GetSet<UActionCombatStaminaSet>());
+    }
+
+    LastObservedStamina = AbilitySystemComponent->GetNumericAttribute(UActionCombatStaminaSet::GetStaminaAttribute());
+    LastStaminaSpendTimeSeconds = GetWorld() ? GetWorld()->GetTimeSeconds() : -1000.0f;
+    RefreshComponentTickEnabled();
+}
+
+void UActionCombatLyraAbilityBridgeComponent::RegenerateStamina(float DeltaTime)
+{
+    if (!bRegenerateStaminaOnAuthority || DeltaTime <= 0.0f)
+    {
+        return;
+    }
+
+    APawn* Pawn = ResolvePawnOwner();
+    ULyraAbilitySystemComponent* AbilitySystemComponent = BoundAbilitySystemComponent.Get();
+    UWorld* World = GetWorld();
+    if (!Pawn || !Pawn->HasAuthority() || !AbilitySystemComponent || !World)
+    {
+        return;
+    }
+
+    if (!AbilitySystemComponent->HasAttributeSetForAttribute(UActionCombatStaminaSet::GetStaminaAttribute()))
+    {
+        EnsureStaminaAttributeSetRegistered();
+        if (!AbilitySystemComponent->HasAttributeSetForAttribute(UActionCombatStaminaSet::GetStaminaAttribute()))
+        {
+            return;
+        }
+    }
+
+    const float CurrentStamina = AbilitySystemComponent->GetNumericAttribute(UActionCombatStaminaSet::GetStaminaAttribute());
+    const float MaxStamina = FMath::Max(AbilitySystemComponent->GetNumericAttribute(UActionCombatStaminaSet::GetMaxStaminaAttribute()), 1.0f);
+    const float RegenRate = FMath::Max(AbilitySystemComponent->GetNumericAttribute(UActionCombatStaminaSet::GetStaminaRegenRateAttribute()), 0.0f);
+
+    if (CurrentStamina + KINDA_SMALL_NUMBER < LastObservedStamina)
+    {
+        LastStaminaSpendTimeSeconds = World->GetTimeSeconds();
+    }
+
+    LastObservedStamina = CurrentStamina;
+
+    if (CurrentStamina >= MaxStamina || RegenRate <= 0.0f)
+    {
+        return;
+    }
+
+    if ((World->GetTimeSeconds() - LastStaminaSpendTimeSeconds) < StaminaRegenDelayAfterSpendSeconds)
+    {
+        return;
+    }
+
+    const float NewStamina = FMath::Min(CurrentStamina + RegenRate * DeltaTime, MaxStamina);
+    if (NewStamina > CurrentStamina)
+    {
+        AbilitySystemComponent->ApplyModToAttribute(UActionCombatStaminaSet::GetStaminaAttribute(), EGameplayModOp::Override, NewStamina);
+        LastObservedStamina = NewStamina;
+    }
+}
+
+void UActionCombatLyraAbilityBridgeComponent::TryStartActionFacing()
+{
+    if (!bFaceLockOnTargetOnActionStart)
+    {
+        return;
+    }
+
+    APawn* Pawn = ResolvePawnOwner();
+    ULockOnComponent* LockOnComponent = ResolveLockOnComponent();
+    if (!Pawn || !LockOnComponent || !LockOnComponent->IsLockActive())
+    {
+        ClearActionFacing();
+        return;
+    }
+
+    FVector FocusLocation = FVector::ZeroVector;
+    if (!LockOnComponent->GetCurrentTargetFocusLocation(FocusLocation))
+    {
+        ClearActionFacing();
+        return;
+    }
+
+    const FVector ToTarget2D = (FocusLocation - Pawn->GetActorLocation()).GetSafeNormal2D();
+    if (ToTarget2D.IsNearlyZero())
+    {
+        ClearActionFacing();
+        return;
+    }
+
+    const AController* Controller = Pawn->GetController();
+    const float CurrentYaw = Controller ? Controller->GetControlRotation().Yaw : Pawn->GetActorRotation().Yaw;
+    const float TargetYaw = ToTarget2D.Rotation().Yaw;
+    const float DeltaYaw = FMath::Abs(FMath::FindDeltaAngleDegrees(CurrentYaw, TargetYaw));
+    if ((MaxActionFacingYawDegrees > 0.0f) && (DeltaYaw > MaxActionFacingYawDegrees))
+    {
+        ClearActionFacing();
+        LogBridge(FString::Printf(TEXT("Skipped action facing because yaw delta %.1f exceeded max %.1f."), DeltaYaw, MaxActionFacingYawDegrees));
+        return;
+    }
+
+    if (ActionFacingTurnDurationSeconds <= KINDA_SMALL_NUMBER)
+    {
+        ClearActionFacing();
+        ApplyFacingYaw(TargetYaw);
+        return;
+    }
+
+    bActionFacingActive = true;
+    ActionFacingStartYaw = CurrentYaw;
+    ActionFacingTargetYaw = TargetYaw;
+    ActionFacingElapsedSeconds = 0.0f;
+    ActiveActionFacingDurationSeconds = ActionFacingTurnDurationSeconds;
+    RefreshComponentTickEnabled();
+}
+
+void UActionCombatLyraAbilityBridgeComponent::TickActionFacing(float DeltaTime)
+{
+    if (!bActionFacingActive)
+    {
+        return;
+    }
+
+    if (DeltaTime <= 0.0f)
+    {
+        return;
+    }
+
+    ActionFacingElapsedSeconds += DeltaTime;
+    const float SafeDuration = FMath::Max(ActiveActionFacingDurationSeconds, KINDA_SMALL_NUMBER);
+    const float Alpha = FMath::Clamp(ActionFacingElapsedSeconds / SafeDuration, 0.0f, 1.0f);
+    const float InterpolatedYaw = ActionFacingStartYaw
+        + (FMath::FindDeltaAngleDegrees(ActionFacingStartYaw, ActionFacingTargetYaw) * Alpha);
+
+    ApplyFacingYaw(InterpolatedYaw);
+
+    if (Alpha >= 1.0f)
+    {
+        ClearActionFacing();
+    }
+}
+
+void UActionCombatLyraAbilityBridgeComponent::ClearActionFacing()
+{
+    bActionFacingActive = false;
+    ActionFacingElapsedSeconds = 0.0f;
+    ActiveActionFacingDurationSeconds = 0.0f;
+    RefreshComponentTickEnabled();
+}
+
+void UActionCombatLyraAbilityBridgeComponent::ApplyFacingYaw(float NewYaw) const
+{
+    APawn* Pawn = ResolvePawnOwner();
+    if (!Pawn)
+    {
+        return;
+    }
+
+    const FRotator DesiredRotation(0.0f, NewYaw, 0.0f);
+    if (AController* Controller = Pawn->GetController())
+    {
+        FRotator ControlRotation = Controller->GetControlRotation();
+        ControlRotation.Yaw = NewYaw;
+        Controller->SetControlRotation(ControlRotation);
+    }
+
+    Pawn->FaceRotation(DesiredRotation, 0.0f);
+}
+
+ULockOnComponent* UActionCombatLyraAbilityBridgeComponent::ResolveLockOnComponent() const
+{
+    if (AActor* Owner = GetOwner())
+    {
+        return Owner->FindComponentByClass<ULockOnComponent>();
+    }
+
+    return nullptr;
 }
 
 void UActionCombatLyraAbilityBridgeComponent::EnsureFallbackDashAbilityGranted()
@@ -181,6 +407,22 @@ void UActionCombatLyraAbilityBridgeComponent::EnsureFallbackDashAbilityGranted()
 
     AbilitySystemComponent->GiveAbility(DashAbilitySpec);
     LogBridge(FString::Printf(TEXT("Granted fallback dash ability %s with input tag %s."), *GetNameSafe(DashAbilityClass), *FallbackDashInputTag.ToString()));
+}
+
+void UActionCombatLyraAbilityBridgeComponent::SetActionMovementBlockActive(bool bNewActive)
+{
+    ULyraAbilitySystemComponent* AbilitySystemComponent = BoundAbilitySystemComponent.Get();
+    if (!AbilitySystemComponent)
+    {
+        AbilitySystemComponent = ResolveLyraAbilitySystemComponent();
+    }
+
+    if (!AbilitySystemComponent)
+    {
+        return;
+    }
+
+    AbilitySystemComponent->SetLooseGameplayTagCount(ActionCombatLyraBridgeTags::Combat_State_Action, bNewActive ? 1 : 0);
 }
 
 bool UActionCombatLyraAbilityBridgeComponent::HasObservedDashAbilitySpec(const ULyraAbilitySystemComponent& AbilitySystemComponent) const
@@ -264,6 +506,9 @@ bool UActionCombatLyraAbilityBridgeComponent::IsObservedDashAbility(const UGamep
 
 void UActionCombatLyraAbilityBridgeComponent::HandleActionStarted(FActionCombatActiveActionState ActionState)
 {
+    SetActionMovementBlockActive(true);
+    TryStartActionFacing();
+
     if (!bDispatchActionStartedEvents)
     {
         return;
@@ -275,6 +520,9 @@ void UActionCombatLyraAbilityBridgeComponent::HandleActionStarted(FActionCombatA
 
 void UActionCombatLyraAbilityBridgeComponent::HandleActionEnded(FActionCombatActiveActionState ActionState)
 {
+    SetActionMovementBlockActive(false);
+    ClearActionFacing();
+
     if (!bDispatchActionEndedEvents)
     {
         return;

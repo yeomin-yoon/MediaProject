@@ -157,6 +157,12 @@ void UActionCombatLyraGuardComponent::SetGuardInputHeldAuthority(bool bNewGuardI
         return;
     }
 
+    if (bBlockGuardStartDuringCombatAction && bNewGuardInputHeld && !GuardState.bGuardInputHeld && IsCombatActionActive())
+    {
+        LogGuard(TEXT("Guard input ignored because a combat action is active."));
+        return;
+    }
+
     if (GuardState.bGuardInputHeld == bNewGuardInputHeld)
     {
         return;
@@ -385,6 +391,21 @@ void UActionCombatLyraGuardComponent::InterruptCombatActionIfNeeded()
     {
         CombatComponent->InterruptActiveAction();
     }
+}
+
+bool UActionCombatLyraGuardComponent::IsCombatActionActive() const
+{
+    if (const UActionCombatComponent* CombatComponent = ResolveActionCombatComponent())
+    {
+        if (CombatComponent->GetActiveActionState().ActionTag.IsValid())
+        {
+            return true;
+        }
+    }
+
+    const UAbilitySystemComponent* AbilitySystemComponent = ResolveAbilitySystemComponent();
+    return AbilitySystemComponent
+        && AbilitySystemComponent->HasMatchingGameplayTag(ActionCombatLyraBridgeTags::Combat_State_Action);
 }
 
 bool UActionCombatLyraGuardComponent::HasGuardAuthority() const
