@@ -162,6 +162,12 @@ public:
     bool TryApplyReactionHit(const FActionCombatReactionHit& IncomingHit, FActionCombatReactionResult& OutResult);
     void PlayReplicatedReactionCue(EActionCombatReactionState NewState, FVector_NetQuantizeNormal WorldSpaceImpulseDirection, FVector_NetQuantize WorldSpaceActorLocation, int32 CueId);
 
+    UFUNCTION(BlueprintCallable, Category = "Action Combat|Reaction")
+    bool ForceKnockdown(AActor* InstigatorActor = nullptr, FVector WorldSpaceImpulseDirection = FVector::ZeroVector);
+
+    UFUNCTION(BlueprintCallable, Category = "Action Combat|Reaction")
+    static bool ForceKnockdownActor(AActor* TargetActor, AActor* InstigatorActor = nullptr, FVector WorldSpaceImpulseDirection = FVector::ZeroVector);
+
 protected:
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Action Combat|Reaction", meta = (ClampMin = "0.0"))
     float LightHitDurationSeconds = 0.20f;
@@ -270,9 +276,11 @@ private:
     void FinishReaction(float AdditionalImmunitySeconds);
     void HandleReactionTimerExpired();
     bool InterruptCombatAction() const;
+    bool ForceKnockdownInternal(AActor* InstigatorActor, const FVector& WorldSpaceImpulseDirection, FActionCombatReactionResult* OutResult);
     void ApplyMovementLock(bool bLockMovement);
     void ApplyReactionFacing(const FVector& WorldSpaceImpulseDirection);
     void ApplyKnockdownLaunch(const FVector& WorldSpaceImpulseDirection);
+<<<<<<< Updated upstream
     void StartKnockdownActorDisplacement(const FVector& WorldSpaceImpulseDirection, float DurationSeconds);
     void TickKnockdownActorDisplacement(float DeltaTime);
     void ClearKnockdownActorDisplacement();
@@ -288,6 +296,9 @@ private:
     USkeletalMeshComponent* ResolveAnimationMesh(const FActionCombatReactionAnimation* ReactionAnimation) const;
     bool IsAnimationCompatibleWithMesh(const USkeletalMeshComponent* MeshComponent, const FActionCombatReactionAnimation* ReactionAnimation) const;
     float GetReactionAnimationPlayLengthSeconds(EActionCombatReactionState ReactionState, const FVector& WorldSpaceImpulseDirection, float FallbackSeconds) const;
+=======
+    FVector ResolveImpulseDirection(AActor* InstigatorActor, const FVector& WorldSpaceImpulseDirection) const;
+>>>>>>> Stashed changes
     double GetCurrentWorldTimeSeconds() const;
 
     UFUNCTION()
