@@ -280,7 +280,7 @@ private:
     void ApplyMovementLock(bool bLockMovement);
     void ApplyReactionFacing(const FVector& WorldSpaceImpulseDirection);
     void ApplyKnockdownLaunch(const FVector& WorldSpaceImpulseDirection);
-<<<<<<< Updated upstream
+
     void StartKnockdownActorDisplacement(const FVector& WorldSpaceImpulseDirection, float DurationSeconds);
     void TickKnockdownActorDisplacement(float DeltaTime);
     void ClearKnockdownActorDisplacement();
@@ -296,9 +296,9 @@ private:
     USkeletalMeshComponent* ResolveAnimationMesh(const FActionCombatReactionAnimation* ReactionAnimation) const;
     bool IsAnimationCompatibleWithMesh(const USkeletalMeshComponent* MeshComponent, const FActionCombatReactionAnimation* ReactionAnimation) const;
     float GetReactionAnimationPlayLengthSeconds(EActionCombatReactionState ReactionState, const FVector& WorldSpaceImpulseDirection, float FallbackSeconds) const;
-=======
+
     FVector ResolveImpulseDirection(AActor* InstigatorActor, const FVector& WorldSpaceImpulseDirection) const;
->>>>>>> Stashed changes
+
     double GetCurrentWorldTimeSeconds() const;
 
     UFUNCTION()

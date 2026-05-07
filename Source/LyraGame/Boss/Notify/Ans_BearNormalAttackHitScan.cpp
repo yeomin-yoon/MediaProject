@@ -1,7 +1,9 @@
 #include "Boss/Notify/Ans_BearNormalAttackHitScan.h"
 #include "AbilitySystemBlueprintLibrary.h"
 #include "AbilitySystemComponent.h"
+#include "ActionCombatReactionComponent.h"
 #include "Kismet/KismetSystemLibrary.h"
+
 
 void UAns_BearNormalAttackHitScan::NotifyBegin(USkeletalMeshComponent* MeshComp, UAnimSequenceBase* Animation,
                                                float TotalDuration)
@@ -52,6 +54,9 @@ void UAns_BearNormalAttackHitScan::NotifyTick(USkeletalMeshComponent* MeshComp, 
 
 		FGameplayEffectSpecHandle Spec = SourceASC->MakeOutgoingSpec(DamageEffectClass, 1.0f, SourceASC->MakeEffectContext());
 		SourceASC->ApplyGameplayEffectSpecToTarget(*Spec.Data, TargetASC);
+		UActionCombatReactionComponent::ForceKnockdownActor(HitActor, Boss);
+		
+		
 	}
 }
 

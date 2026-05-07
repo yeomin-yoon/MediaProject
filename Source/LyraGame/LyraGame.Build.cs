@@ -18,6 +18,11 @@ public class LyraGame : ModuleRules
 			new string[] {
 			}
 		);
+		
+		PrivateDependencyModuleNames.AddRange(new string[]
+		{
+			"ActionCombatRuntime"
+		});
 
 		PublicDependencyModuleNames.AddRange(
 			new string[] {
