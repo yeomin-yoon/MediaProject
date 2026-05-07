@@ -81,6 +81,7 @@ void UGA_Boss_Charge::ActivateAbility(const FGameplayAbilitySpecHandle Handle,
 		EndAbility(Handle,ActorInfo,ActivationInfo,true,false);
 	},ChargeSecond,false);
 	BossCharacter->OnActorHit.AddDynamic(this,&UGA_Boss_Charge::OnChargeHit);
+	BossCharacter->OnActorBeginOverlap.AddDynamic(this,&UGA_Boss_Charge::OnChargeOverlap);
 	
 	
 }
@@ -101,29 +102,6 @@ void UGA_Boss_Charge::OnChargeHit(AActor* SelfActor, AActor* OtherActor, FVector
 			UE_LOG(LogTemp, Warning, TEXT("[Stun] 플레이어 히트"));
 			EndAbility(CacheHandle,CacheActorInfo,CacheActivationInfo,true,false);
 		}
-		else if(OtherASC->HasMatchingGameplayTag(FGameplayTag::RequestGameplayTag("Actor.Wall")))
-		{
-			UE_LOG(LogTemp, Warning, TEXT("[Stun] 벽 히트 → 스턴 발동 시도"));
-			UAbilitySystemComponent* BossASC = UAbilitySystemGlobals::GetAbilitySystemComponentFromActor(SelfActor);
-			EndAbility(CacheHandle,CacheActorInfo,CacheActivationInfo,true,false);
-
-			// 디버그: EndAbility 후 보스 ASC 상태 확인
-			FGameplayTagContainer BossTags;
-			BossASC->GetOwnedGameplayTags(BossTags);
-			UE_LOG(LogTemp, Warning, TEXT("[Stun] EndAbility 후 보스 보유 태그: %s"), *BossTags.ToString());
-
-			// 디버그: Grant된 GA 목록 확인
-			for (const FGameplayAbilitySpec& Spec : BossASC->GetActivatableAbilities())
-			{
-				UE_LOG(LogTemp, Warning, TEXT("[Stun] Grant된 GA: %s | AbilityTags: %s"),
-					*GetNameSafe(Spec.Ability), *Spec.Ability->AbilityTags.ToString());
-			}
-
-			FGameplayTagContainer StunTag;
-			StunTag.AddTag(FGameplayTag::RequestGameplayTag("Boss.Action.Stun"));
-			bool bSuccess = BossASC->TryActivateAbilitiesByTag(StunTag);
-			UE_LOG(LogTemp, Warning, TEXT("[Stun] TryActivateAbilitiesByTag 결과: %s"), bSuccess ? TEXT("성공") : TEXT("실패"));
-		}
 		else
 		{
 			UE_LOG(LogTemp, Warning, TEXT("[Stun] ASC 있지만 Player/Wall 태그 없음 → 무시"));
@@ -135,11 +113,38 @@ void UGA_Boss_Charge::OnChargeHit(AActor* SelfActor, AActor* OtherActor, FVector
 	}
 }
 
+void UGA_Boss_Charge::OnChargeOverlap(AActor* SelfActor, AActor* OtherActor)
+{
+	UAbilitySystemComponent* OtherASC = UAbilitySystemGlobals::GetAbilitySystemComponentFromActor(OtherActor);
+	if (!OtherASC) return;
+
+	if (OtherASC->HasMatchingGameplayTag(FGameplayTag::RequestGameplayTag("Actor.Wall")))
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[Charge] 벽 히트 → Charge 종료 + Stun 이벤트 발송"));
+		EndAbility(CacheHandle, CacheActorInfo, CacheActivationInfo, true, false);
+
+		// StateTree에 스턴 이벤트 발송 → Stunned State로 전이
+		// (실제 GA 발동은 STTask_Boss_Stun이 담당)
+		if (ABearBossBase* BossPawn = Cast<ABearBossBase>(SelfActor))
+		{
+			if (ABossCharacterBaseAiController* AIC = Cast<ABossCharacterBaseAiController>(BossPawn->GetController()))
+			{
+				if (UStateTreeAIComponent* STComp = AIC->GetStateTreeComp())
+				{
+					STComp->SendStateTreeEvent(
+						FStateTreeEvent(FGameplayTag::RequestGameplayTag("Boss.Event.Stun")));
+					UE_LOG(LogTemp, Warning, TEXT("[Charge] Boss.Event.Stun 이벤트 발송"));
+				}
+			}
+		}
+	}
+}
+
 void UGA_Boss_Charge::EndAbility(const FGameplayAbilitySpecHandle Handle,
-	const FGameplayAbilityActorInfo* ActorInfo,
-	const FGameplayAbilityActivationInfo ActivationInfo,
-	bool bReplicateEndAbility,
-	bool bWasCancelled)
+                                 const FGameplayAbilityActorInfo* ActorInfo,
+                                 const FGameplayAbilityActivationInfo ActivationInfo,
+                                 bool bReplicateEndAbility,
+                                 bool bWasCancelled)
 {
 	
 	ABearBossBase* BossBase  = Cast<ABearBossBase>(GetAvatarActorFromActorInfo());

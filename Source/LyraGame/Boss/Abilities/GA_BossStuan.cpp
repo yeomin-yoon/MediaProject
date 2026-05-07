@@ -3,6 +3,7 @@
 
 #include "Boss/Abilities/GA_BossStuan.h"
 
+#include "AIController.h"
 #include "Abilities/Tasks/AbilityTask_PlayMontageAndWait.h"
 #include "Abilities/Tasks/AbilityTask_WaitDelay.h"
 #include "Boss/Bear/BearBossBase.h"
@@ -32,7 +33,11 @@ void UGA_BossStuan::ActivateAbility(const FGameplayAbilitySpecHandle Handle, con
 
 	Bear->GetCharacterMovement()->SetMovementMode(MOVE_None);
 	UE_LOG(LogTemp, Warning, TEXT("[Stun] 이동 정지 (MOVE_None)"));
-	// 몽타주 재생 (GA 종료 시 자동 중단)
+	
+	if (AAIController* AIController = Cast<AAIController>(Bear->GetController()))
+	{
+		AIController->StopMovement(); 
+	}
 	UAbilityTask_PlayMontageAndWait* MontageTask = UAbilityTask_PlayMontageAndWait::CreatePlayMontageAndWaitProxy(
 		this, NAME_None, StunMontage, 1.0f,
 		FName("StunStart"),
@@ -54,11 +59,8 @@ void UGA_BossStuan::EndAbility(const FGameplayAbilitySpecHandle Handle, const FG
 	Bear->GetCharacterMovement()->SetMovementMode(MOVE_Walking);
 	{
 		UCharacterMovementComponent* MoveComp = Bear->GetCharacterMovement();
-		UE_LOG(LogTemp, Warning,
-			TEXT("[Stun] EndAbility - MOVE_Walking 세팅 후 MovementMode=%d IsFalling=%d IsMovingOnGround=%d"),
-			(int32)MoveComp->MovementMode.GetValue(),
-			MoveComp->IsFalling(),
-			MoveComp->IsMovingOnGround());
+		MoveComp->SetMovementMode(MOVE_Walking);
+	
 	}
 	Super::EndAbility(Handle, ActorInfo, ActivationInfo, bReplicateEndAbility, bWasCancelled);
 }

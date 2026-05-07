@@ -44,5 +44,7 @@ private:
 	// void OnChargeHit(AActor* SelfActor, AActor* OtherActor, FVector NormalImpulse, const FHitResult& Hit);
 	UFUNCTION()
 	void OnChargeHit(AActor* SelfActor, AActor* OtherActor, FVector NormalImpulse, const FHitResult& Hit);
+	UFUNCTION()
+	void OnChargeOverlap(AActor* OverlappedActor, AActor* OtherActor);
 	
 };
