@@ -364,6 +364,21 @@ bool UActionCombatReactionComponent::TryApplyReactionHit(const FActionCombatReac
     return OutResult.Outcome != EActionCombatReactionOutcome::None;
 }
 
+bool UActionCombatReactionComponent::ForceKnockdown(AActor* InstigatorActor, FVector WorldSpaceImpulseDirection)
+{
+    return ForceKnockdownInternal(InstigatorActor, WorldSpaceImpulseDirection, nullptr);
+}
+
+bool UActionCombatReactionComponent::ForceKnockdownActor(AActor* TargetActor, AActor* InstigatorActor, FVector WorldSpaceImpulseDirection)
+{
+    if (UActionCombatReactionComponent* ReactionComponent = FindOrCreateReactionComponent(TargetActor))
+    {
+        return ReactionComponent->ForceKnockdown(InstigatorActor, WorldSpaceImpulseDirection);
+    }
+
+    return false;
+}
+
 UAbilitySystemComponent* UActionCombatReactionComponent::ResolveAbilitySystemComponent() const
 {
     return UAbilitySystemGlobals::GetAbilitySystemComponentFromActor(GetOwner());
@@ -632,6 +647,54 @@ bool UActionCombatReactionComponent::InterruptCombatAction() const
     }
 
     return false;
+}
+
+bool UActionCombatReactionComponent::ForceKnockdownInternal(AActor* InstigatorActor, const FVector& WorldSpaceImpulseDirection, FActionCombatReactionResult* OutResult)
+{
+    if (!HasReactionAuthority())
+    {
+        UE_LOG(
+            LogActionCombatRuntime,
+            Warning,
+            TEXT("[Reaction:%s] ForceKnockdown ignored because the caller did not have authority."),
+            *GetPathNameSafe(GetOwner()));
+        return false;
+    }
+
+    const FVector ResolvedImpulseDirection = ResolveImpulseDirection(InstigatorActor, WorldSpaceImpulseDirection);
+    const double CurrentWorldTimeSeconds = GetCurrentWorldTimeSeconds();
+
+    if (OutResult)
+    {
+        OutResult->Outcome = EActionCombatReactionOutcome::Knockdown;
+        OutResult->PoiseBefore = GetCurrentPoise();
+        OutResult->PoiseAfter = GetMaxPoise();
+        OutResult->PoiseBreakChainCount = 0;
+    }
+
+    const bool bInterruptedCombatAction = InterruptCombatAction();
+    if (OutResult)
+    {
+        OutResult->bInterruptedCombatAction = bInterruptedCombatAction;
+    }
+
+    ReactionImmunityEndWorldTimeSeconds = -1.0;
+    LastIncomingHitWorldTimeSeconds = CurrentWorldTimeSeconds;
+    LastPoiseBreakWorldTimeSeconds = CurrentWorldTimeSeconds;
+    RecentPoiseBreakCount = 0;
+    SetCurrentPoise(GetMaxPoise());
+    SetComponentTickEnabled(true);
+    BeginKnockdown(ResolvedImpulseDirection);
+
+    UE_LOG(
+        LogActionCombatRuntime,
+        Log,
+        TEXT("[Reaction:%s] ForceKnockdown Instigator=%s Direction=%s"),
+        *GetPathNameSafe(GetOwner()),
+        *GetPathNameSafe(InstigatorActor),
+        *ResolvedImpulseDirection.ToCompactString());
+
+    return true;
 }
 
 void UActionCombatReactionComponent::ApplyMovementLock(bool bLockMovement)
@@ -1264,6 +1327,27 @@ void UActionCombatReactionComponent::PlayReplicatedReactionCue(EActionCombatReac
         StartKnockdownActorDisplacement(WorldSpaceImpulseDirection, FMath::Max(KnockdownAnimationSeconds - FMath::Max(GetUpHoldReleaseDelaySeconds, 0.0f), 0.01f));
     }
     PlayReactionAnimation(NewState, WorldSpaceImpulseDirection);
+}
+
+FVector UActionCombatReactionComponent::ResolveImpulseDirection(AActor* InstigatorActor, const FVector& WorldSpaceImpulseDirection) const
+{
+    FVector ResolvedImpulseDirection = WorldSpaceImpulseDirection.GetSafeNormal2D();
+    if (!ResolvedImpulseDirection.IsNearlyZero())
+    {
+        return ResolvedImpulseDirection;
+    }
+
+    const AActor* Owner = GetOwner();
+    if ((Owner != nullptr) && (InstigatorActor != nullptr))
+    {
+        ResolvedImpulseDirection = (Owner->GetActorLocation() - InstigatorActor->GetActorLocation()).GetSafeNormal2D();
+        if (!ResolvedImpulseDirection.IsNearlyZero())
+        {
+            return ResolvedImpulseDirection;
+        }
+    }
+
+    return Owner ? -Owner->GetActorForwardVector().GetSafeNormal2D() : FVector::BackwardVector;
 }
 
 double UActionCombatReactionComponent::GetCurrentWorldTimeSeconds() const
