@@ -72,6 +72,15 @@ struct ACTIONCOMBATRUNTIME_API FActionCombatActiveActionState
     UPROPERTY(BlueprintReadOnly, Category = "Damage")
     float BuildupMultiplier = 1.0f;
 
+    UPROPERTY(BlueprintReadOnly, Category = "Action")
+    float AttackAdvanceAppliedDistance = 0.0f;
+
+    UPROPERTY(BlueprintReadOnly, Category = "Action")
+    FVector AttackAdvanceDirection = FVector::ZeroVector;
+
+    UPROPERTY(BlueprintReadOnly, Category = "Action")
+    bool bAttackAdvanceBlocked = false;
+
     void Reset()
     {
         ActionTag = FGameplayTag();
@@ -85,6 +94,9 @@ struct ACTIONCOMBATRUNTIME_API FActionCombatActiveActionState
         MotionValue = 1.0f;
         PoiseDamage = 0.0f;
         BuildupMultiplier = 1.0f;
+        AttackAdvanceAppliedDistance = 0.0f;
+        AttackAdvanceDirection = FVector::ZeroVector;
+        bAttackAdvanceBlocked = false;
     }
 };
 
@@ -298,7 +310,12 @@ private:
     bool ResolveTransitionAndStart(const FGameplayTag& FromActionTag, const FActionCombatBufferedCommandState& CommandRequest);
     bool StartActionFromDefinition(const FActionCombatActionDefinition* ActionDefinition, const UActionCombatStyleData* SourceStyle);
     void EndActiveAction(bool bWasInterrupted);
+    void InitializeAttackAdvanceForAction();
     void UpdateActiveActionProgress(float DeltaTime);
+    void TickAttackAdvance(float DeltaTime);
+    bool CanApplyAttackAdvance() const;
+    FVector ResolveAttackAdvanceDirection() const;
+    bool MoveOwnerForAttackAdvance(const FVector& Delta, FHitResult& OutHit);
     void TryCommitPendingCommands();
     void RefreshActiveMontagePlayRate();
     void SyncReplicatedMontage();

@@ -8,6 +8,8 @@
 #include "Animation/AnimInstance.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "GameFramework/Actor.h"
+#include "GameFramework/Character.h"
+#include "GameFramework/CharacterMovementComponent.h"
 #include "GameFramework/GameStateBase.h"
 #include "Net/UnrealNetwork.h"
 
@@ -49,6 +51,7 @@ void UActionCombatComponent::TickComponent(float DeltaTime, ELevelTick TickType,
     }
 
     UpdateActiveActionProgress(DeltaTime);
+    TickAttackAdvance(DeltaTime);
     TryCommitPendingCommands();
 }
 
@@ -348,6 +351,11 @@ void UActionCombatComponent::OnRep_ReplicatedState()
     }
     else
     {
+        if ((PreviousState.ActionInstanceId != ReplicatedState.ActionInstanceId) || (PreviousState.ActionTag != ReplicatedState.ActiveActionTag))
+        {
+            ActiveActionState.Reset();
+        }
+
         ActiveActionState.ActionTag = ReplicatedState.ActiveActionTag;
         ActiveActionState.ActionInstanceId = ReplicatedState.ActionInstanceId;
         ActiveActionState.EffectivePlayRate = ReplicatedState.EffectivePlayRate;
@@ -514,6 +522,7 @@ bool UActionCombatComponent::StartActionFromDefinition(const FActionCombatAction
     ActiveActionState.MotionValue = ActionDefinition->MotionValue;
     ActiveActionState.PoiseDamage = ActionDefinition->PoiseDamage;
     ActiveActionState.BuildupMultiplier = ActionDefinition->BuildupMultiplier;
+    InitializeAttackAdvanceForAction();
 
     if (bAutoPlayMontages && ActionDefinition->Montage)
     {
@@ -572,6 +581,13 @@ void UActionCombatComponent::EndActiveAction(bool bWasInterrupted)
     UpdateReplicatedStateFromLocal();
 }
 
+void UActionCombatComponent::InitializeAttackAdvanceForAction()
+{
+    ActiveActionState.AttackAdvanceAppliedDistance = 0.0f;
+    ActiveActionState.AttackAdvanceDirection = FVector::ZeroVector;
+    ActiveActionState.bAttackAdvanceBlocked = false;
+}
+
 void UActionCombatComponent::UpdateActiveActionProgress(float DeltaTime)
 {
     if (!ActiveActionDefinition)
@@ -602,6 +618,146 @@ void UActionCombatComponent::UpdateActiveActionProgress(float DeltaTime)
     const float SafeDuration = FMath::Max(ActiveActionDefinition->FallbackDurationSeconds, KINDA_SMALL_NUMBER);
     ActiveActionElapsedScaledTime += DeltaTime * ActiveActionState.EffectivePlayRate;
     ActiveActionState.NormalizedProgress = FMath::Clamp(ActiveActionElapsedScaledTime / SafeDuration, 0.0f, 1.0f);
+}
+
+void UActionCombatComponent::TickAttackAdvance(float DeltaTime)
+{
+    (void)DeltaTime;
+
+    AActor* Owner = GetOwner();
+    if (!Owner || !Owner->HasAuthority() || !ActiveActionDefinition || !ActiveActionState.ActionTag.IsValid())
+    {
+        return;
+    }
+
+    const FActionCombatAttackAdvanceSettings& AttackAdvance = ActiveActionDefinition->AttackAdvance;
+    if (!AttackAdvance.bEnabled || AttackAdvance.Distance <= 0.0f || ActiveActionState.bAttackAdvanceBlocked)
+    {
+        return;
+    }
+
+    if (!CanApplyAttackAdvance())
+    {
+        return;
+    }
+
+    const float StartTime = FMath::Clamp(AttackAdvance.StartNormalizedTime, 0.0f, 1.0f);
+    const float EndTime = FMath::Clamp(AttackAdvance.EndNormalizedTime, 0.0f, 1.0f);
+    if (EndTime <= StartTime + KINDA_SMALL_NUMBER)
+    {
+        return;
+    }
+
+    if (ActiveActionState.NormalizedProgress <= StartTime)
+    {
+        return;
+    }
+
+    if (ActiveActionState.AttackAdvanceDirection.IsNearlyZero())
+    {
+        ActiveActionState.AttackAdvanceDirection = ResolveAttackAdvanceDirection();
+    }
+
+    if (ActiveActionState.AttackAdvanceDirection.IsNearlyZero())
+    {
+        return;
+    }
+
+    const float WindowAlpha = FMath::Clamp((ActiveActionState.NormalizedProgress - StartTime) / (EndTime - StartTime), 0.0f, 1.0f);
+    const float CurvedAlpha = FMath::Pow(WindowAlpha, FMath::Max(AttackAdvance.CurveExponent, 0.1f));
+    const float DesiredDistance = AttackAdvance.Distance * CurvedAlpha;
+    const float DeltaDistance = DesiredDistance - ActiveActionState.AttackAdvanceAppliedDistance;
+    if (DeltaDistance <= KINDA_SMALL_NUMBER)
+    {
+        return;
+    }
+
+    const FVector PreviousLocation = Owner->GetActorLocation();
+    FHitResult MoveHit;
+    if (!MoveOwnerForAttackAdvance(ActiveActionState.AttackAdvanceDirection * DeltaDistance, MoveHit))
+    {
+        return;
+    }
+
+    const FVector ActualDelta = Owner->GetActorLocation() - PreviousLocation;
+    const float ActualDistance = FVector::DotProduct(ActualDelta, ActiveActionState.AttackAdvanceDirection);
+    ActiveActionState.AttackAdvanceAppliedDistance += FMath::Max(ActualDistance, 0.0f);
+
+    if (AttackAdvance.bStopOnBlockingHit && MoveHit.IsValidBlockingHit())
+    {
+        ActiveActionState.bAttackAdvanceBlocked = true;
+    }
+
+    if ((ActualDistance > KINDA_SMALL_NUMBER) || MoveHit.IsValidBlockingHit())
+    {
+        Owner->ForceNetUpdate();
+    }
+}
+
+bool UActionCombatComponent::CanApplyAttackAdvance() const
+{
+    const AActor* Owner = GetOwner();
+    if (!Owner || !Owner->HasAuthority() || !ActiveActionDefinition)
+    {
+        return false;
+    }
+
+    const FActionCombatAttackAdvanceSettings& AttackAdvance = ActiveActionDefinition->AttackAdvance;
+    if (!AttackAdvance.bRequireGrounded)
+    {
+        return true;
+    }
+
+    const ACharacter* Character = Cast<ACharacter>(Owner);
+    if (!Character)
+    {
+        return true;
+    }
+
+    const UCharacterMovementComponent* MoveComp = Character->GetCharacterMovement();
+    if (!MoveComp)
+    {
+        return false;
+    }
+
+    return MoveComp->MovementMode == MOVE_Walking || MoveComp->MovementMode == MOVE_NavWalking;
+}
+
+FVector UActionCombatComponent::ResolveAttackAdvanceDirection() const
+{
+    const AActor* Owner = GetOwner();
+    if (!Owner)
+    {
+        return FVector::ZeroVector;
+    }
+
+    FVector Direction = Owner->GetActorForwardVector();
+    Direction.Z = 0.0f;
+    return Direction.GetSafeNormal();
+}
+
+bool UActionCombatComponent::MoveOwnerForAttackAdvance(const FVector& Delta, FHitResult& OutHit)
+{
+    AActor* Owner = GetOwner();
+    if (!Owner || Delta.IsNearlyZero())
+    {
+        return false;
+    }
+
+    if (ACharacter* Character = Cast<ACharacter>(Owner))
+    {
+        if (UCharacterMovementComponent* MoveComp = Character->GetCharacterMovement())
+        {
+            if (MoveComp->UpdatedComponent)
+            {
+                MoveComp->SafeMoveUpdatedComponent(Delta, Character->GetActorQuat(), true, OutHit, ETeleportType::None);
+                return true;
+            }
+        }
+    }
+
+    Owner->AddActorWorldOffset(Delta, true, &OutHit, ETeleportType::None);
+    return true;
 }
 
 void UActionCombatComponent::TryCommitPendingCommands()

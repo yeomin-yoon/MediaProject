@@ -164,12 +164,16 @@ namespace ActionCombatStyleGraphView
             Action.QueueWindowClosesAtNormalizedTime,
             Action.ChainCommitAtNormalizedTime);
 
+        const FString AdvanceSummary = (Action.AttackAdvance.bEnabled && Action.AttackAdvance.Distance > 0.0f)
+            ? FString::Printf(TEXT(" | Adv %.0fcm"), Action.AttackAdvance.Distance)
+            : FString();
+
         if (Action.Montage)
         {
-            return FString::Printf(TEXT("%s\n%s"), *QueueWindowText, *Action.Montage->GetName());
+            return FString::Printf(TEXT("%s\n%s%s"), *QueueWindowText, *Action.Montage->GetName(), *AdvanceSummary);
         }
 
-        return FString::Printf(TEXT("%s\nFallback %.2fs"), *QueueWindowText, Action.FallbackDurationSeconds);
+        return FString::Printf(TEXT("%s\nFallback %.2fs%s"), *QueueWindowText, Action.FallbackDurationSeconds, *AdvanceSummary);
     }
 
     FString FormatTagContainerList(const FGameplayTagContainer& TagContainer)
@@ -1351,6 +1355,55 @@ TSharedRef<SWidget> SActionCombatStyleGraphView::BuildSelectionEditor()
                 });
         };
 
+        auto AttackAdvanceFloatValue = [this, ActionIndex](float FActionCombatAttackAdvanceSettings::* Field) -> TOptional<float>
+        {
+            if (TArray<FActionCombatActionDefinition>* CurrentActions = ActionCombatStyleGraphView::GetMutableActions(StyleData.Get()))
+            {
+                if (CurrentActions->IsValidIndex(ActionIndex))
+                {
+                    return (((*CurrentActions)[ActionIndex].AttackAdvance).*Field);
+                }
+            }
+            return TOptional<float>();
+        };
+
+        auto AttackAdvanceFloatEditor = [this, ActionIndex, AttackAdvanceFloatValue](float FActionCombatAttackAdvanceSettings::* Field, const FText& TransactionText)
+        {
+            return SNew(SNumericEntryBox<float>)
+                .Value_Lambda([AttackAdvanceFloatValue, Field]() { return AttackAdvanceFloatValue(Field); })
+                .OnValueCommitted_Lambda([this, ActionIndex, Field, TransactionText](float NewValue, ETextCommit::Type)
+                {
+                    ModifyAction(ActionIndex, [Field, NewValue](FActionCombatActionDefinition& MutableAction)
+                    {
+                        (MutableAction.AttackAdvance).*Field = NewValue;
+                    }, TransactionText);
+                });
+        };
+
+        auto AttackAdvanceBoolEditor = [this, ActionIndex](bool FActionCombatAttackAdvanceSettings::* Field, const FText& TransactionText)
+        {
+            return SNew(SCheckBox)
+                .IsChecked_Lambda([this, ActionIndex, Field]()
+                {
+                    if (TArray<FActionCombatActionDefinition>* CurrentActions = ActionCombatStyleGraphView::GetMutableActions(StyleData.Get()))
+                    {
+                        if (CurrentActions->IsValidIndex(ActionIndex))
+                        {
+                            return (((*CurrentActions)[ActionIndex].AttackAdvance).*Field) ? ECheckBoxState::Checked : ECheckBoxState::Unchecked;
+                        }
+                    }
+
+                    return ECheckBoxState::Unchecked;
+                })
+                .OnCheckStateChanged_Lambda([this, ActionIndex, Field, TransactionText](ECheckBoxState NewState)
+                {
+                    ModifyAction(ActionIndex, [Field, NewState](FActionCombatActionDefinition& MutableAction)
+                    {
+                        (MutableAction.AttackAdvance).*Field = NewState == ECheckBoxState::Checked;
+                    }, TransactionText);
+                });
+        };
+
         return SNew(SBorder)
             .BorderImage(FAppStyle::GetBrush("Brushes.Panel"))
             .Padding(10.0f)
@@ -1399,6 +1452,13 @@ TSharedRef<SWidget> SActionCombatStyleGraphView::BuildSelectionEditor()
                     + SVerticalBox::Slot().AutoHeight()[BuildRow(LOCTEXT("MotionValueLabel", "Motion Value"), FloatEditor(&FActionCombatActionDefinition::MotionValue, LOCTEXT("EditMotionValueTransaction", "Edit Motion Value")))]
                     + SVerticalBox::Slot().AutoHeight()[BuildRow(LOCTEXT("PoiseDamageLabel", "Poise Damage"), FloatEditor(&FActionCombatActionDefinition::PoiseDamage, LOCTEXT("EditPoiseDamageTransaction", "Edit Poise Damage")))]
                     + SVerticalBox::Slot().AutoHeight()[BuildRow(LOCTEXT("BuildupLabel", "Buildup Multiplier"), FloatEditor(&FActionCombatActionDefinition::BuildupMultiplier, LOCTEXT("EditBuildupTransaction", "Edit Buildup Multiplier")))]
+                    + SVerticalBox::Slot().AutoHeight()[BuildRow(LOCTEXT("AdvanceEnabledLabel", "Advance Enabled"), AttackAdvanceBoolEditor(&FActionCombatAttackAdvanceSettings::bEnabled, LOCTEXT("EditAdvanceEnabledTransaction", "Edit Attack Advance Enabled")))]
+                    + SVerticalBox::Slot().AutoHeight()[BuildRow(LOCTEXT("AdvanceDistanceLabel", "Advance Distance"), AttackAdvanceFloatEditor(&FActionCombatAttackAdvanceSettings::Distance, LOCTEXT("EditAdvanceDistanceTransaction", "Edit Attack Advance Distance")))]
+                    + SVerticalBox::Slot().AutoHeight()[BuildRow(LOCTEXT("AdvanceStartLabel", "Advance Start"), AttackAdvanceFloatEditor(&FActionCombatAttackAdvanceSettings::StartNormalizedTime, LOCTEXT("EditAdvanceStartTransaction", "Edit Attack Advance Start")))]
+                    + SVerticalBox::Slot().AutoHeight()[BuildRow(LOCTEXT("AdvanceEndLabel", "Advance End"), AttackAdvanceFloatEditor(&FActionCombatAttackAdvanceSettings::EndNormalizedTime, LOCTEXT("EditAdvanceEndTransaction", "Edit Attack Advance End")))]
+                    + SVerticalBox::Slot().AutoHeight()[BuildRow(LOCTEXT("AdvanceCurveLabel", "Advance Curve"), AttackAdvanceFloatEditor(&FActionCombatAttackAdvanceSettings::CurveExponent, LOCTEXT("EditAdvanceCurveTransaction", "Edit Attack Advance Curve")))]
+                    + SVerticalBox::Slot().AutoHeight()[BuildRow(LOCTEXT("AdvanceGroundedLabel", "Advance Grounded"), AttackAdvanceBoolEditor(&FActionCombatAttackAdvanceSettings::bRequireGrounded, LOCTEXT("EditAdvanceGroundedTransaction", "Edit Attack Advance Require Grounded")))]
+                    + SVerticalBox::Slot().AutoHeight()[BuildRow(LOCTEXT("AdvanceStopOnBlockLabel", "Advance Stop On Block"), AttackAdvanceBoolEditor(&FActionCombatAttackAdvanceSettings::bStopOnBlockingHit, LOCTEXT("EditAdvanceStopOnBlockTransaction", "Edit Attack Advance Stop On Block")))]
                     + SVerticalBox::Slot().AutoHeight()
                     [
                         BuildRow(LOCTEXT("TraceSourceLabel", "Trace Source Id"),

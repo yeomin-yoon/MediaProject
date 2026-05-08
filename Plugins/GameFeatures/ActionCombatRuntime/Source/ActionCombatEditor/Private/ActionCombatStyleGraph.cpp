@@ -111,12 +111,16 @@ namespace ActionCombatStyleGraph
             Action.QueueWindowClosesAtNormalizedTime,
             Action.ChainCommitAtNormalizedTime);
 
+        const FString AdvanceSummary = (Action.AttackAdvance.bEnabled && Action.AttackAdvance.Distance > 0.0f)
+            ? FString::Printf(TEXT(" | Adv %.0fcm"), Action.AttackAdvance.Distance)
+            : FString();
+
         if (Action.Montage)
         {
-            return FString::Printf(TEXT("%s\n%s"), *QueueWindow, *Action.Montage->GetName());
+            return FString::Printf(TEXT("%s\n%s%s"), *QueueWindow, *Action.Montage->GetName(), *AdvanceSummary);
         }
 
-        return FString::Printf(TEXT("%s\nFallback %.2fs"), *QueueWindow, Action.FallbackDurationSeconds);
+        return FString::Printf(TEXT("%s\nFallback %.2fs%s"), *QueueWindow, Action.FallbackDurationSeconds, *AdvanceSummary);
     }
 
     FString FormatCommandKeyHint(const FGameplayTag& CommandTag)
