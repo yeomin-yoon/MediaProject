@@ -34,6 +34,12 @@ struct ACTIONCOMBATLYRABRIDGE_API FActionCombatLyraInputBinding
     bool bMirrorHeldStateWhilePressed = false;
 
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Binding")
+    bool bRepeatStartedCommandWhileHeld = false;
+
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Binding", meta = (ClampMin = "0.03"))
+    float StartedCommandRepeatIntervalSeconds = 0.25f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Binding")
     bool bSetFocusActiveOnStarted = false;
 
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Binding")
@@ -59,6 +65,11 @@ struct ACTIONCOMBATLYRABRIDGE_API FActionCombatLyraInputBinding
             || (bMirrorHeldStateWhilePressed && HeldInputStateTag.IsValid())
             || bSetFocusInactiveOnCompleted
             || bClearGuardInputHeldOnCompleted;
+    }
+
+    bool WantsTriggeredBinding() const
+    {
+        return bRepeatStartedCommandWhileHeld && (StartedCommandTag.IsValid() || InputTag.IsValid());
     }
 };
 
@@ -100,8 +111,10 @@ private:
     void TryBindInput();
     void RemoveInputBindings();
     void HandleInputStarted(FGameplayTag InputTag);
+    void HandleInputTriggered(FGameplayTag InputTag);
     void HandleInputCompleted(FGameplayTag InputTag);
     void ApplyStartedBinding(const FActionCombatLyraInputBinding& Binding);
+    void ApplyRepeatedStartedCommand(const FActionCombatLyraInputBinding& Binding);
     void ApplyCompletedBinding(const FActionCombatLyraInputBinding& Binding);
     void LogBinding(const FString& Message) const;
     APawn* ResolvePawnOwner() const;
@@ -113,4 +126,5 @@ private:
 
     TWeakObjectPtr<UInputComponent> BoundInputComponent;
     TArray<uint32> BoundInputHandles;
+    TMap<FGameplayTag, double> NextRepeatCommandTimeByInputTag;
 };

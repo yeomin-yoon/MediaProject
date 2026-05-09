@@ -40,6 +40,11 @@ namespace ActionCombatLyraInputBridge
 
     static FGameplayTag ResolveStartedCommandTag(const FActionCombatLyraInputBinding& Binding)
     {
+        if (Binding.StartedCommandTag.IsValid())
+        {
+            return Binding.StartedCommandTag;
+        }
+
         if (Binding.InputTag == GetPrimaryAttackInputTag())
         {
             return GetLightCommandTag();
@@ -164,6 +169,11 @@ void UActionCombatLyraInputBridgeComponent::TryBindInput()
             BoundInputHandles.Add(EnhancedInputComponent->BindAction(InputAction, ETriggerEvent::Started, this, &ThisClass::HandleInputStarted, Binding.InputTag).GetHandle());
         }
 
+        if (Binding.WantsTriggeredBinding())
+        {
+            BoundInputHandles.Add(EnhancedInputComponent->BindAction(InputAction, ETriggerEvent::Triggered, this, &ThisClass::HandleInputTriggered, Binding.InputTag).GetHandle());
+        }
+
         if (Binding.WantsCompletedBinding())
         {
             BoundInputHandles.Add(EnhancedInputComponent->BindAction(InputAction, ETriggerEvent::Completed, this, &ThisClass::HandleInputCompleted, Binding.InputTag).GetHandle());
@@ -186,6 +196,7 @@ void UActionCombatLyraInputBridgeComponent::RemoveInputBindings()
 
     BoundInputHandles.Reset();
     BoundInputComponent.Reset();
+    NextRepeatCommandTimeByInputTag.Reset();
 }
 
 void UActionCombatLyraInputBridgeComponent::HandleInputStarted(FGameplayTag InputTag)
@@ -193,7 +204,38 @@ void UActionCombatLyraInputBridgeComponent::HandleInputStarted(FGameplayTag Inpu
     if (const FActionCombatLyraInputBinding* Binding = FindBindingByInputTag(InputTag))
     {
         ApplyStartedBinding(*Binding);
+
+        if (Binding->bRepeatStartedCommandWhileHeld)
+        {
+            const double CurrentTime = GetWorld() ? GetWorld()->GetTimeSeconds() : 0.0;
+            NextRepeatCommandTimeByInputTag.Add(InputTag, CurrentTime + FMath::Max(0.03f, Binding->StartedCommandRepeatIntervalSeconds));
+        }
     }
+}
+
+void UActionCombatLyraInputBridgeComponent::HandleInputTriggered(FGameplayTag InputTag)
+{
+    const FActionCombatLyraInputBinding* Binding = FindBindingByInputTag(InputTag);
+    if (!Binding || !Binding->bRepeatStartedCommandWhileHeld)
+    {
+        return;
+    }
+
+    const double CurrentTime = GetWorld() ? GetWorld()->GetTimeSeconds() : 0.0;
+    const double* NextRepeatTime = NextRepeatCommandTimeByInputTag.Find(InputTag);
+    if (!NextRepeatTime)
+    {
+        NextRepeatCommandTimeByInputTag.Add(InputTag, CurrentTime + FMath::Max(0.03f, Binding->StartedCommandRepeatIntervalSeconds));
+        return;
+    }
+
+    if (CurrentTime < *NextRepeatTime)
+    {
+        return;
+    }
+
+    ApplyRepeatedStartedCommand(*Binding);
+    NextRepeatCommandTimeByInputTag.Add(InputTag, CurrentTime + FMath::Max(0.03f, Binding->StartedCommandRepeatIntervalSeconds));
 }
 
 void UActionCombatLyraInputBridgeComponent::HandleInputCompleted(FGameplayTag InputTag)
@@ -201,6 +243,7 @@ void UActionCombatLyraInputBridgeComponent::HandleInputCompleted(FGameplayTag In
     if (const FActionCombatLyraInputBinding* Binding = FindBindingByInputTag(InputTag))
     {
         ApplyCompletedBinding(*Binding);
+        NextRepeatCommandTimeByInputTag.Remove(InputTag);
     }
 }
 
@@ -247,6 +290,24 @@ void UActionCombatLyraInputBridgeComponent::ApplyStartedBinding(const FActionCom
         }
 
         CombatComponent->RequestCommand(StartedCommandTag);
+    }
+}
+
+void UActionCombatLyraInputBridgeComponent::ApplyRepeatedStartedCommand(const FActionCombatLyraInputBinding& Binding)
+{
+    const FGameplayTag StartedCommandTag = ActionCombatLyraInputBridge::ResolveStartedCommandTag(Binding);
+    if (!StartedCommandTag.IsValid())
+    {
+        return;
+    }
+
+    if (UActionCombatComponent* CombatComponent = ResolveActionCombatComponent())
+    {
+        CombatComponent->RequestCommand(StartedCommandTag);
+    }
+    else
+    {
+        LogBinding(FString::Printf(TEXT("Repeated input ignored because ActionCombatComponent was missing. InputTag=%s"), *Binding.InputTag.ToString()));
     }
 }
 
