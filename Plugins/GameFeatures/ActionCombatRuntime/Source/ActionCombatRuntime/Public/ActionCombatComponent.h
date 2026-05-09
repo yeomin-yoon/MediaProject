@@ -9,6 +9,7 @@
 #include "ActionCombatComponent.generated.h"
 
 class AActor;
+class UAnimInstance;
 class UAnimMontage;
 class UAbilitySystemComponent;
 class USkeletalMeshComponent;
@@ -312,6 +313,16 @@ private:
     void EndActiveAction(bool bWasInterrupted);
     void InitializeAttackAdvanceForAction();
     void UpdateActiveActionProgress(float DeltaTime);
+    void InitializeManualMontageRootMotion(UAnimMontage* PlayableMontage, UAnimInstance* AnimInstance);
+    void TickManualMontageRootMotion();
+    void ResetManualMontageRootMotion();
+    bool ShouldManuallyDriveMontageRootMotion(const UAnimMontage* PlayableMontage) const;
+    void ConfigureAnimationTickPrerequisite();
+    void ApplyActiveActionAnimationOverrides();
+    void ResetActionAnimationOverrides();
+    static void ApplyFootPlacementOverride(UAnimInstance* AnimInstance, bool bDisableFootPlacement);
+    static bool SetAnimBoolProperty(UAnimInstance* AnimInstance, FName PropertyName, bool bValue);
+    static bool SetAnimFloatProperty(UAnimInstance* AnimInstance, FName PropertyName, float Value);
     void TickAttackAdvance(float DeltaTime);
     bool CanApplyAttackAdvance() const;
     FVector ResolveAttackAdvanceDirection() const;
@@ -323,6 +334,8 @@ private:
     void UpdateReplicatedStateFromLocal();
     float GetStylePlayRateSnapshot() const;
     bool IsCurrentActionFinished() const;
+    UAnimMontage* ResolvePlayableMontage(UAnimMontage* SourceMontage);
+    static bool ShouldUseFullBodyMontageOverride(const UAnimMontage* SourceMontage);
     const FActionCombatActionDefinition* FindActionDefinitionInLayers(const FGameplayTag& ActionTag, const UActionCombatStyleData*& OutSourceStyle) const;
     const FActionCombatTransitionDefinition* FindTransitionInLayers(const FGameplayTag& FromActionTag, const FActionCombatBufferedCommandState& CommandRequest) const;
     bool DoesOwnerMeetActionTagRequirements(const FActionCombatActionDefinition* ActionDefinition, FString& OutFailureReason) const;
@@ -341,6 +354,9 @@ private:
     float ActiveActionElapsedScaledTime = 0.0f;
     float ActiveActionStylePlayRateSnapshot = 1.0f;
     int32 ActionInstanceCounter = 0;
+    TWeakObjectPtr<UAnimMontage> ManualRootMotionMontage;
+    float ManualRootMotionPreviousPosition = 0.0f;
+    int32 ManualRootMotionActionInstanceId = 0;
     FActionCombatBufferedCommandState BufferedCommand;
     FActionCombatBufferedCommandState PendingInterruptCommand;
     FGameplayTagContainer HeldInputTags;
@@ -348,4 +364,7 @@ private:
     TWeakObjectPtr<UAnimMontage> LastReplicatedMontage;
     int32 LastReplicatedMontageActionInstanceId = 0;
     bool bFocusActive = false;
+
+    UPROPERTY(Transient)
+    TMap<TObjectPtr<UAnimMontage>, TObjectPtr<UAnimMontage>> RuntimeMontageOverrides;
 };

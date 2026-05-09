@@ -6,16 +6,38 @@
 #include "AbilitySystemComponent.h"
 #include "AbilitySystemGlobals.h"
 #include "Animation/AnimInstance.h"
+#include "Animation/AnimMontage.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "GameFramework/Actor.h"
 #include "GameFramework/Character.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "GameFramework/GameStateBase.h"
 #include "Net/UnrealNetwork.h"
+#include "UObject/UnrealType.h"
 
 namespace ActionCombatComponent
 {
     static const FName BaseStyleLayerId(TEXT("BaseStyle"));
+    static const FName DefaultMontageSlotName(TEXT("DefaultSlot"));
+    static const FName FullBodyMontageSlotName(TEXT("FullBody"));
+    static const FName DisableLegIKCurveName(TEXT("DisableLegIK"));
+    static const FName UseFootPlacementPropertyName(TEXT("UseFootPlacement"));
+
+    static void PrepareAnimInstanceForMontageRootMotion(UAnimInstance* AnimInstance)
+    {
+        if (AnimInstance)
+        {
+            AnimInstance->SetRootMotionMode(ERootMotionMode::IgnoreRootMotion);
+        }
+    }
+
+    static void RestoreAnimInstanceRootMotionMode(UAnimInstance* AnimInstance)
+    {
+        if (AnimInstance)
+        {
+            AnimInstance->SetRootMotionMode(ERootMotionMode::RootMotionFromMontagesOnly);
+        }
+    }
 }
 
 UActionCombatComponent::UActionCombatComponent(const FObjectInitializer& ObjectInitializer)
@@ -23,6 +45,7 @@ UActionCombatComponent::UActionCombatComponent(const FObjectInitializer& ObjectI
 {
     PrimaryComponentTick.bCanEverTick = true;
     PrimaryComponentTick.bStartWithTickEnabled = false;
+    PrimaryComponentTick.TickGroup = TG_PrePhysics;
     SetIsReplicatedByDefault(true);
 }
 
@@ -31,6 +54,7 @@ void UActionCombatComponent::BeginPlay()
     Super::BeginPlay();
 
     SetComponentTickEnabled(false);
+    ConfigureAnimationTickPrerequisite();
     SortStyleLayers();
     UpdateReplicatedStateFromLocal();
 }
@@ -41,6 +65,13 @@ void UActionCombatComponent::TickComponent(float DeltaTime, ELevelTick TickType,
 
     if (!HasRuntimeAuthority())
     {
+        if (!ActiveActionState.ActionTag.IsValid())
+        {
+            SetComponentTickEnabled(false);
+            return;
+        }
+
+        ApplyActiveActionAnimationOverrides();
         return;
     }
 
@@ -51,6 +82,8 @@ void UActionCombatComponent::TickComponent(float DeltaTime, ELevelTick TickType,
     }
 
     UpdateActiveActionProgress(DeltaTime);
+    ApplyActiveActionAnimationOverrides();
+    TickManualMontageRootMotion();
     TickAttackAdvance(DeltaTime);
     TryCommitPendingCommands();
 }
@@ -348,6 +381,7 @@ void UActionCombatComponent::OnRep_ReplicatedState()
     if (!ReplicatedState.ActiveActionTag.IsValid())
     {
         ActiveActionState.Reset();
+        ResetActionAnimationOverrides();
     }
     else
     {
@@ -384,6 +418,7 @@ void UActionCombatComponent::OnRep_ReplicatedState()
     if (!HasRuntimeAuthority())
     {
         SyncReplicatedMontage();
+        SetComponentTickEnabled(ActiveActionState.ActionTag.IsValid());
     }
 
     if (PreviousState.ActionInstanceId != ActiveActionState.ActionInstanceId)
@@ -436,16 +471,6 @@ bool UActionCombatComponent::HandleCommandRequestInternal(const FActionCombatBuf
     if (!ActiveActionDefinition)
     {
         LogCommandFlow(FString::Printf(TEXT("RequestRejected NoActiveDefinition Command=%s"), *FormatCommandState(CommandRequest)));
-        return false;
-    }
-
-    if (ActiveActionState.NormalizedProgress < ActiveActionDefinition->QueueWindowStartsAtNormalizedTime)
-    {
-        LogCommandFlow(FString::Printf(
-            TEXT("RequestRejected QueueNotOpen Command=%s Progress=%.2f OpensAt=%.2f"),
-            *FormatCommandState(CommandRequest),
-            ActiveActionState.NormalizedProgress,
-            ActiveActionDefinition->QueueWindowStartsAtNormalizedTime));
         return false;
     }
 
@@ -530,9 +555,16 @@ bool UActionCombatComponent::StartActionFromDefinition(const FActionCombatAction
         {
             if (UAnimInstance* AnimInstance = MeshComponent->GetAnimInstance())
             {
-                if (AnimInstance->Montage_Play(ActionDefinition->Montage, ActiveActionState.EffectivePlayRate) > 0.0f)
+                if (UAnimMontage* PlayableMontage = ResolvePlayableMontage(ActionDefinition->Montage))
                 {
-                    ActiveActionState.bUsingMontageTiming = true;
+                    ActionCombatComponent::PrepareAnimInstanceForMontageRootMotion(AnimInstance);
+                    ApplyActiveActionAnimationOverrides();
+
+                    if (AnimInstance->Montage_Play(PlayableMontage, ActiveActionState.EffectivePlayRate) > 0.0f)
+                    {
+                        ActiveActionState.bUsingMontageTiming = true;
+                        InitializeManualMontageRootMotion(PlayableMontage, AnimInstance);
+                    }
                 }
             }
         }
@@ -562,7 +594,10 @@ void UActionCombatComponent::EndActiveAction(bool bWasInterrupted)
         {
             if (UAnimInstance* AnimInstance = MeshComponent->GetAnimInstance())
             {
-                AnimInstance->Montage_Stop(0.05f, ActiveActionDefinition->Montage);
+                if (UAnimMontage* PlayableMontage = ResolvePlayableMontage(ActiveActionDefinition->Montage))
+                {
+                    AnimInstance->Montage_Stop(0.05f, PlayableMontage);
+                }
             }
         }
     }
@@ -572,6 +607,8 @@ void UActionCombatComponent::EndActiveAction(bool bWasInterrupted)
     ActiveActionSourceStyle = nullptr;
     ActiveActionElapsedScaledTime = 0.0f;
     ActiveActionStylePlayRateSnapshot = 1.0f;
+    ResetManualMontageRootMotion();
+    ResetActionAnimationOverrides();
 
     if (!BufferedCommand.IsValid() && !PendingInterruptCommand.IsValid())
     {
@@ -601,12 +638,15 @@ void UActionCombatComponent::UpdateActiveActionProgress(float DeltaTime)
         {
             if (UAnimInstance* AnimInstance = MeshComponent->GetAnimInstance())
             {
-                if (AnimInstance->Montage_IsPlaying(ActiveActionDefinition->Montage))
+                if (UAnimMontage* PlayableMontage = ResolvePlayableMontage(ActiveActionDefinition->Montage))
                 {
-                    const float MontageLength = FMath::Max(ActiveActionDefinition->Montage->GetPlayLength(), KINDA_SMALL_NUMBER);
-                    const float MontagePosition = AnimInstance->Montage_GetPosition(ActiveActionDefinition->Montage);
-                    ActiveActionState.NormalizedProgress = FMath::Clamp(MontagePosition / MontageLength, 0.0f, 1.0f);
-                    return;
+                    if (AnimInstance->Montage_IsPlaying(PlayableMontage))
+                    {
+                        const float MontageLength = FMath::Max(PlayableMontage->GetPlayLength(), KINDA_SMALL_NUMBER);
+                        const float MontagePosition = AnimInstance->Montage_GetPosition(PlayableMontage);
+                        ActiveActionState.NormalizedProgress = FMath::Clamp(MontagePosition / MontageLength, 0.0f, 1.0f);
+                        return;
+                    }
                 }
             }
         }
@@ -618,6 +658,199 @@ void UActionCombatComponent::UpdateActiveActionProgress(float DeltaTime)
     const float SafeDuration = FMath::Max(ActiveActionDefinition->FallbackDurationSeconds, KINDA_SMALL_NUMBER);
     ActiveActionElapsedScaledTime += DeltaTime * ActiveActionState.EffectivePlayRate;
     ActiveActionState.NormalizedProgress = FMath::Clamp(ActiveActionElapsedScaledTime / SafeDuration, 0.0f, 1.0f);
+}
+
+void UActionCombatComponent::InitializeManualMontageRootMotion(UAnimMontage* PlayableMontage, UAnimInstance* AnimInstance)
+{
+    ResetManualMontageRootMotion();
+
+    if (!AnimInstance || !ShouldManuallyDriveMontageRootMotion(PlayableMontage))
+    {
+        return;
+    }
+
+    ManualRootMotionMontage = PlayableMontage;
+    ManualRootMotionPreviousPosition = AnimInstance->Montage_GetPosition(PlayableMontage);
+    ManualRootMotionActionInstanceId = ActiveActionState.ActionInstanceId;
+}
+
+void UActionCombatComponent::TickManualMontageRootMotion()
+{
+    AActor* Owner = GetOwner();
+    if (!Owner || !Owner->HasAuthority() || !ActiveActionState.ActionTag.IsValid() || !ManualRootMotionMontage.IsValid())
+    {
+        return;
+    }
+
+    if (ManualRootMotionActionInstanceId != ActiveActionState.ActionInstanceId)
+    {
+        ResetManualMontageRootMotion();
+        return;
+    }
+
+    USkeletalMeshComponent* MeshComponent = ResolveAnimationMesh();
+    if (!MeshComponent)
+    {
+        return;
+    }
+
+    UAnimInstance* AnimInstance = MeshComponent->GetAnimInstance();
+    UAnimMontage* PlayableMontage = ManualRootMotionMontage.Get();
+    if (!AnimInstance || !PlayableMontage || !AnimInstance->Montage_IsPlaying(PlayableMontage))
+    {
+        return;
+    }
+
+    const float CurrentPosition = AnimInstance->Montage_GetPosition(PlayableMontage);
+    const float PreviousPosition = ManualRootMotionPreviousPosition;
+    ManualRootMotionPreviousPosition = CurrentPosition;
+
+    if (FMath::IsNearlyEqual(CurrentPosition, PreviousPosition))
+    {
+        return;
+    }
+
+    const FTransform LocalRootMotion = PlayableMontage->ExtractRootMotionFromTrackRange(PreviousPosition, CurrentPosition);
+    if (LocalRootMotion.GetTranslation().IsNearlyZero() && LocalRootMotion.GetRotation().IsIdentity())
+    {
+        return;
+    }
+
+    const FTransform WorldRootMotion = MeshComponent->ConvertLocalRootMotionToWorld(LocalRootMotion);
+    const FVector WorldDelta = WorldRootMotion.GetTranslation();
+    if (WorldDelta.IsNearlyZero())
+    {
+        return;
+    }
+
+    const FVector PreviousLocation = Owner->GetActorLocation();
+    FHitResult MoveHit;
+    if (!MoveOwnerForAttackAdvance(WorldDelta, MoveHit))
+    {
+        return;
+    }
+
+    const bool bMoved = !Owner->GetActorLocation().Equals(PreviousLocation, KINDA_SMALL_NUMBER);
+    if (bMoved || MoveHit.IsValidBlockingHit())
+    {
+        Owner->ForceNetUpdate();
+    }
+}
+
+void UActionCombatComponent::ResetManualMontageRootMotion()
+{
+    ManualRootMotionMontage = nullptr;
+    ManualRootMotionPreviousPosition = 0.0f;
+    ManualRootMotionActionInstanceId = 0;
+}
+
+bool UActionCombatComponent::ShouldManuallyDriveMontageRootMotion(const UAnimMontage* PlayableMontage) const
+{
+    const AActor* Owner = GetOwner();
+    return Owner && Owner->HasAuthority() && PlayableMontage && PlayableMontage->HasRootMotion();
+}
+
+void UActionCombatComponent::ConfigureAnimationTickPrerequisite()
+{
+    if (USkeletalMeshComponent* MeshComponent = ResolveAnimationMesh())
+    {
+        MeshComponent->AddTickPrerequisiteComponent(this);
+    }
+}
+
+void UActionCombatComponent::ApplyActiveActionAnimationOverrides()
+{
+    if (!ActiveActionState.ActionTag.IsValid())
+    {
+        return;
+    }
+
+    USkeletalMeshComponent* MeshComponent = ResolveAnimationMesh();
+    if (!MeshComponent)
+    {
+        return;
+    }
+
+    if (UAnimInstance* AnimInstance = MeshComponent->GetAnimInstance())
+    {
+        ApplyFootPlacementOverride(AnimInstance, true);
+    }
+
+    const USkeletalMeshComponent* ConstMeshComponent = MeshComponent;
+    for (UAnimInstance* LinkedAnimInstance : ConstMeshComponent->GetLinkedAnimInstances())
+    {
+        ApplyFootPlacementOverride(LinkedAnimInstance, true);
+    }
+}
+
+void UActionCombatComponent::ResetActionAnimationOverrides()
+{
+    if (USkeletalMeshComponent* MeshComponent = ResolveAnimationMesh())
+    {
+        if (UAnimInstance* AnimInstance = MeshComponent->GetAnimInstance())
+        {
+            ApplyFootPlacementOverride(AnimInstance, false);
+            ActionCombatComponent::RestoreAnimInstanceRootMotionMode(AnimInstance);
+        }
+
+        const USkeletalMeshComponent* ConstMeshComponent = MeshComponent;
+        for (UAnimInstance* LinkedAnimInstance : ConstMeshComponent->GetLinkedAnimInstances())
+        {
+            ApplyFootPlacementOverride(LinkedAnimInstance, false);
+        }
+    }
+}
+
+void UActionCombatComponent::ApplyFootPlacementOverride(UAnimInstance* AnimInstance, bool bDisableFootPlacement)
+{
+    if (!AnimInstance)
+    {
+        return;
+    }
+
+    const float DisableLegIKValue = bDisableFootPlacement ? 1.0f : 0.0f;
+    AnimInstance->AddCurveValue(ActionCombatComponent::DisableLegIKCurveName, DisableLegIKValue);
+    AnimInstance->OverrideCurveValue(ActionCombatComponent::DisableLegIKCurveName, DisableLegIKValue);
+    SetAnimBoolProperty(AnimInstance, ActionCombatComponent::UseFootPlacementPropertyName, !bDisableFootPlacement);
+    SetAnimFloatProperty(AnimInstance, ActionCombatComponent::DisableLegIKCurveName, DisableLegIKValue);
+}
+
+bool UActionCombatComponent::SetAnimBoolProperty(UAnimInstance* AnimInstance, FName PropertyName, bool bValue)
+{
+    if (!AnimInstance || PropertyName.IsNone())
+    {
+        return false;
+    }
+
+    if (FBoolProperty* BoolProperty = FindFProperty<FBoolProperty>(AnimInstance->GetClass(), PropertyName))
+    {
+        BoolProperty->SetPropertyValue_InContainer(AnimInstance, bValue);
+        return true;
+    }
+
+    return false;
+}
+
+bool UActionCombatComponent::SetAnimFloatProperty(UAnimInstance* AnimInstance, FName PropertyName, float Value)
+{
+    if (!AnimInstance || PropertyName.IsNone())
+    {
+        return false;
+    }
+
+    if (FFloatProperty* FloatProperty = FindFProperty<FFloatProperty>(AnimInstance->GetClass(), PropertyName))
+    {
+        FloatProperty->SetPropertyValue_InContainer(AnimInstance, Value);
+        return true;
+    }
+
+    if (FDoubleProperty* DoubleProperty = FindFProperty<FDoubleProperty>(AnimInstance->GetClass(), PropertyName))
+    {
+        DoubleProperty->SetPropertyValue_InContainer(AnimInstance, static_cast<double>(Value));
+        return true;
+    }
+
+    return false;
 }
 
 void UActionCombatComponent::TickAttackAdvance(float DeltaTime)
@@ -639,6 +872,17 @@ void UActionCombatComponent::TickAttackAdvance(float DeltaTime)
     if (!CanApplyAttackAdvance())
     {
         return;
+    }
+
+    if (bAutoPlayMontages && ActiveActionDefinition->Montage)
+    {
+        if (UAnimMontage* PlayableMontage = ResolvePlayableMontage(ActiveActionDefinition->Montage))
+        {
+            if (PlayableMontage->HasRootMotion())
+            {
+                return;
+            }
+        }
     }
 
     const float StartTime = FMath::Clamp(AttackAdvance.StartNormalizedTime, 0.0f, 1.0f);
@@ -837,7 +1081,10 @@ void UActionCombatComponent::RefreshActiveMontagePlayRate()
     {
         if (UAnimInstance* AnimInstance = MeshComponent->GetAnimInstance())
         {
-            AnimInstance->Montage_SetPlayRate(ActiveActionDefinition->Montage, ActiveActionState.EffectivePlayRate);
+            if (UAnimMontage* PlayableMontage = ResolvePlayableMontage(ActiveActionDefinition->Montage))
+            {
+                AnimInstance->Montage_SetPlayRate(PlayableMontage, ActiveActionState.EffectivePlayRate);
+            }
         }
     }
 }
@@ -869,30 +1116,83 @@ void UActionCombatComponent::SyncReplicatedMontage()
         return;
     }
 
-    const bool bActionChanged = LastReplicatedMontageActionInstanceId != ReplicatedState.ActionInstanceId || LastReplicatedMontage.Get() != IncomingMontage;
+    UAnimMontage* PlayableMontage = ResolvePlayableMontage(IncomingMontage);
+    if (!PlayableMontage)
+    {
+        return;
+    }
+
+    const bool bActionChanged = LastReplicatedMontageActionInstanceId != ReplicatedState.ActionInstanceId || LastReplicatedMontage.Get() != PlayableMontage;
     const AGameStateBase* GameState = GetWorld() ? GetWorld()->GetGameState() : nullptr;
     const float ServerNow = GameState ? GameState->GetServerWorldTimeSeconds() : ReplicatedState.MontageServerStartTimeSeconds;
     const float EstimatedElapsed = FMath::Max(ServerNow - ReplicatedState.MontageServerStartTimeSeconds, 0.0f);
-    const float MontageLength = FMath::Max(IncomingMontage->GetPlayLength(), KINDA_SMALL_NUMBER);
+    const float MontageLength = FMath::Max(PlayableMontage->GetPlayLength(), KINDA_SMALL_NUMBER);
     const float DesiredPosition = FMath::Clamp(EstimatedElapsed * ReplicatedState.EffectivePlayRate, 0.0f, MontageLength - KINDA_SMALL_NUMBER);
     ActiveActionState.NormalizedProgress = FMath::Clamp(DesiredPosition / MontageLength, 0.0f, 1.0f);
 
     if (bActionChanged)
     {
-        AnimInstance->Montage_Play(IncomingMontage, ReplicatedState.EffectivePlayRate);
-        AnimInstance->Montage_SetPosition(IncomingMontage, DesiredPosition);
-        LastReplicatedMontage = IncomingMontage;
+        ActionCombatComponent::PrepareAnimInstanceForMontageRootMotion(AnimInstance);
+        AnimInstance->Montage_Play(PlayableMontage, ReplicatedState.EffectivePlayRate);
+        AnimInstance->Montage_SetPosition(PlayableMontage, DesiredPosition);
+        LastReplicatedMontage = PlayableMontage;
         LastReplicatedMontageActionInstanceId = ReplicatedState.ActionInstanceId;
-        LogCommandFlow(FString::Printf(TEXT("RepMontageStarted Montage=%s ActionInstance=%d Pos=%.2f"), *GetNameSafe(IncomingMontage), ReplicatedState.ActionInstanceId, DesiredPosition));
+        LogCommandFlow(FString::Printf(TEXT("RepMontageStarted Montage=%s ActionInstance=%d Pos=%.2f"), *GetNameSafe(PlayableMontage), ReplicatedState.ActionInstanceId, DesiredPosition));
         return;
     }
 
-    AnimInstance->Montage_SetPlayRate(IncomingMontage, ReplicatedState.EffectivePlayRate);
-    const float CurrentPosition = AnimInstance->Montage_GetPosition(IncomingMontage);
+    AnimInstance->Montage_SetPlayRate(PlayableMontage, ReplicatedState.EffectivePlayRate);
+    const float CurrentPosition = AnimInstance->Montage_GetPosition(PlayableMontage);
     if (FMath::Abs(CurrentPosition - DesiredPosition) > 0.1f)
     {
-        AnimInstance->Montage_SetPosition(IncomingMontage, DesiredPosition);
+        AnimInstance->Montage_SetPosition(PlayableMontage, DesiredPosition);
     }
+}
+
+bool UActionCombatComponent::ShouldUseFullBodyMontageOverride(const UAnimMontage* SourceMontage)
+{
+    return SourceMontage
+        && SourceMontage->SlotAnimTracks.Num() == 1
+        && SourceMontage->SlotAnimTracks[0].SlotName == ActionCombatComponent::DefaultMontageSlotName
+        && SourceMontage->GetFirstAnimReference() != nullptr;
+}
+
+UAnimMontage* UActionCombatComponent::ResolvePlayableMontage(UAnimMontage* SourceMontage)
+{
+    if (!ShouldUseFullBodyMontageOverride(SourceMontage))
+    {
+        return SourceMontage;
+    }
+
+    if (TObjectPtr<UAnimMontage>* ExistingOverride = RuntimeMontageOverrides.Find(SourceMontage))
+    {
+        return ExistingOverride->Get();
+    }
+
+    UAnimSequenceBase* SourceSequence = SourceMontage->GetFirstAnimReference();
+    if (!SourceSequence)
+    {
+        return SourceMontage;
+    }
+
+    UAnimMontage* OverrideMontage = UAnimMontage::CreateSlotAnimationAsDynamicMontage(
+        SourceSequence,
+        ActionCombatComponent::FullBodyMontageSlotName,
+        SourceMontage->GetDefaultBlendInTime(),
+        SourceMontage->GetDefaultBlendOutTime(),
+        1.0f,
+        1,
+        SourceMontage->BlendOutTriggerTime,
+        0.0f);
+
+    if (!OverrideMontage)
+    {
+        return SourceMontage;
+    }
+
+    OverrideMontage->bEnableAutoBlendOut = SourceMontage->bEnableAutoBlendOut;
+    RuntimeMontageOverrides.Add(SourceMontage, OverrideMontage);
+    return OverrideMontage;
 }
 
 void UActionCombatComponent::SortStyleLayers()
@@ -932,7 +1232,10 @@ void UActionCombatComponent::UpdateReplicatedStateFromLocal()
             {
                 if (UAnimInstance* AnimInstance = MeshComponent->GetAnimInstance())
                 {
-                    ElapsedUnscaledSeconds = AnimInstance->Montage_GetPosition(ActiveActionDefinition->Montage);
+                    if (UAnimMontage* PlayableMontage = ResolvePlayableMontage(ActiveActionDefinition->Montage))
+                    {
+                        ElapsedUnscaledSeconds = AnimInstance->Montage_GetPosition(PlayableMontage);
+                    }
                 }
             }
         }

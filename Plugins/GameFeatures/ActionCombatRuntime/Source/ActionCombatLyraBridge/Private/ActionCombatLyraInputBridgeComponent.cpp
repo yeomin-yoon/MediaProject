@@ -12,6 +12,48 @@
 #include "Input/LyraInputConfig.h"
 #include "InputAction.h"
 
+namespace ActionCombatLyraInputBridge
+{
+    static FGameplayTag GetPrimaryAttackInputTag()
+    {
+        static const FGameplayTag Tag = FGameplayTag::RequestGameplayTag(TEXT("InputTag.Combat.Attack.Primary"), false);
+        return Tag;
+    }
+
+    static FGameplayTag GetSecondaryAttackInputTag()
+    {
+        static const FGameplayTag Tag = FGameplayTag::RequestGameplayTag(TEXT("InputTag.Combat.Attack.Secondary"), false);
+        return Tag;
+    }
+
+    static FGameplayTag GetLightCommandTag()
+    {
+        static const FGameplayTag Tag = FGameplayTag::RequestGameplayTag(TEXT("Combat.Command.Light"), false);
+        return Tag;
+    }
+
+    static FGameplayTag GetAltCommandTag()
+    {
+        static const FGameplayTag Tag = FGameplayTag::RequestGameplayTag(TEXT("Combat.Command.Alt"), false);
+        return Tag;
+    }
+
+    static FGameplayTag ResolveStartedCommandTag(const FActionCombatLyraInputBinding& Binding)
+    {
+        if (Binding.InputTag == GetPrimaryAttackInputTag())
+        {
+            return GetLightCommandTag();
+        }
+
+        if (Binding.InputTag == GetSecondaryAttackInputTag())
+        {
+            return GetAltCommandTag();
+        }
+
+        return Binding.StartedCommandTag;
+    }
+}
+
 UActionCombatLyraInputBridgeComponent::UActionCombatLyraInputBridgeComponent(const FObjectInitializer& ObjectInitializer)
     : Super(ObjectInitializer)
 {
@@ -196,9 +238,15 @@ void UActionCombatLyraInputBridgeComponent::ApplyStartedBinding(const FActionCom
         CombatComponent->SetFocusActive(true);
     }
 
-    if (Binding.StartedCommandTag.IsValid())
+    const FGameplayTag StartedCommandTag = ActionCombatLyraInputBridge::ResolveStartedCommandTag(Binding);
+    if (StartedCommandTag.IsValid())
     {
-        CombatComponent->RequestCommand(Binding.StartedCommandTag);
+        if (StartedCommandTag != Binding.StartedCommandTag)
+        {
+            LogBinding(FString::Printf(TEXT("Started command remapped InputTag=%s From=%s To=%s"), *Binding.InputTag.ToString(), *Binding.StartedCommandTag.ToString(), *StartedCommandTag.ToString()));
+        }
+
+        CombatComponent->RequestCommand(StartedCommandTag);
     }
 }
 
