@@ -24,6 +24,8 @@ UActionCombatLyraAbilityBridgeComponent::UActionCombatLyraAbilityBridgeComponent
     GrantedDashIFrameStateTag = ActionCombatLyraBridgeTags::Combat_State_Dodge_IFrame;
     FallbackDashAbilityClass = TSoftClassPtr<UGameplayAbility>(FSoftClassPath(TEXT("/ShooterCore/Game/Dash/GA_Hero_Dash.GA_Hero_Dash_C")));
     FallbackDashInputTag = FGameplayTag::RequestGameplayTag(TEXT("InputTag.Ability.Dash"), false);
+    DefaultActionStartedEventTag = FGameplayTag::RequestGameplayTag(TEXT("Combat.GameplayEvent.Action.Started"), false);
+    DefaultActionEndedEventTag = FGameplayTag::RequestGameplayTag(TEXT("Combat.GameplayEvent.Action.Ended"), false);
 }
 
 void UActionCombatLyraAbilityBridgeComponent::BeginPlay()
@@ -536,6 +538,7 @@ void UActionCombatLyraAbilityBridgeComponent::DispatchEventForActionState(const 
 {
     if (!EventTag.IsValid())
     {
+        LogBridge(FString::Printf(TEXT("Gameplay event skipped because %s event tag was invalid for action %s instance %d."), bIsEndEvent ? TEXT("ended") : TEXT("started"), *ActionState.ActionTag.ToString(), ActionState.ActionInstanceId));
         return;
     }
 
@@ -630,20 +633,36 @@ FGameplayTag UActionCombatLyraAbilityBridgeComponent::ResolveStartedEventTag(con
 {
     if (const FActionCombatLyraActionEventBinding* Binding = FindActionEventBinding(ActionTag))
     {
-        return Binding->StartedEventTag;
+        if (Binding->StartedEventTag.IsValid())
+        {
+            return Binding->StartedEventTag;
+        }
     }
 
-    return DefaultActionStartedEventTag;
+    if (DefaultActionStartedEventTag.IsValid())
+    {
+        return DefaultActionStartedEventTag;
+    }
+
+    return FGameplayTag::RequestGameplayTag(TEXT("Combat.GameplayEvent.Action.Started"), false);
 }
 
 FGameplayTag UActionCombatLyraAbilityBridgeComponent::ResolveEndedEventTag(const FGameplayTag& ActionTag) const
 {
     if (const FActionCombatLyraActionEventBinding* Binding = FindActionEventBinding(ActionTag))
     {
-        return Binding->EndedEventTag;
+        if (Binding->EndedEventTag.IsValid())
+        {
+            return Binding->EndedEventTag;
+        }
     }
 
-    return DefaultActionEndedEventTag;
+    if (DefaultActionEndedEventTag.IsValid())
+    {
+        return DefaultActionEndedEventTag;
+    }
+
+    return FGameplayTag::RequestGameplayTag(TEXT("Combat.GameplayEvent.Action.Ended"), false);
 }
 
 void UActionCombatLyraAbilityBridgeComponent::HandleObservedDashAbilityTagChanged(const FGameplayTag ChangedTag, int32 NewCount)

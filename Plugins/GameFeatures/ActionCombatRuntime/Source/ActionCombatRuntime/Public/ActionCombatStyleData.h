@@ -59,6 +59,9 @@ struct ACTIONCOMBATRUNTIME_API FActionCombatAttackAdvanceSettings
 
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Attack Advance", meta = (AdvancedDisplay))
     bool bStopOnBlockingHit = true;
+
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Attack Advance", meta = (AdvancedDisplay))
+    bool bCompensateMeshOffset = true;
 };
 
 USTRUCT(BlueprintType)

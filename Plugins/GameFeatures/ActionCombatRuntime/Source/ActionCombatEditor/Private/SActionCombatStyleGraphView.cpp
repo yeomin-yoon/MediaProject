@@ -1459,6 +1459,7 @@ TSharedRef<SWidget> SActionCombatStyleGraphView::BuildSelectionEditor()
                     + SVerticalBox::Slot().AutoHeight()[BuildRow(LOCTEXT("AdvanceCurveLabel", "Advance Curve"), AttackAdvanceFloatEditor(&FActionCombatAttackAdvanceSettings::CurveExponent, LOCTEXT("EditAdvanceCurveTransaction", "Edit Attack Advance Curve")))]
                     + SVerticalBox::Slot().AutoHeight()[BuildRow(LOCTEXT("AdvanceGroundedLabel", "Advance Grounded"), AttackAdvanceBoolEditor(&FActionCombatAttackAdvanceSettings::bRequireGrounded, LOCTEXT("EditAdvanceGroundedTransaction", "Edit Attack Advance Require Grounded")))]
                     + SVerticalBox::Slot().AutoHeight()[BuildRow(LOCTEXT("AdvanceStopOnBlockLabel", "Advance Stop On Block"), AttackAdvanceBoolEditor(&FActionCombatAttackAdvanceSettings::bStopOnBlockingHit, LOCTEXT("EditAdvanceStopOnBlockTransaction", "Edit Attack Advance Stop On Block")))]
+                    + SVerticalBox::Slot().AutoHeight()[BuildRow(LOCTEXT("AdvanceCompensateMeshLabel", "Advance Mesh Compensation"), AttackAdvanceBoolEditor(&FActionCombatAttackAdvanceSettings::bCompensateMeshOffset, LOCTEXT("EditAdvanceCompensateMeshTransaction", "Edit Attack Advance Mesh Compensation")))]
                     + SVerticalBox::Slot().AutoHeight()
                     [
                         BuildRow(LOCTEXT("TraceSourceLabel", "Trace Source Id"),

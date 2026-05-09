@@ -27,6 +27,7 @@ class ACTIONCOMBATLYRABRIDGE_API UActionCombatLyraGameplayAbility_MeleeEffect : 
 public:
     UActionCombatLyraGameplayAbility_MeleeEffect(const FObjectInitializer& ObjectInitializer = FObjectInitializer::Get());
 
+    virtual void PostLoad() override;
     virtual void ActivateAbility(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo, const FGameplayAbilityActivationInfo ActivationInfo, const FGameplayEventData* TriggerEventData) override;
     virtual void EndAbility(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo, const FGameplayAbilityActivationInfo ActivationInfo, bool bReplicateEndAbility, bool bWasCancelled) override;
 
@@ -128,6 +129,7 @@ protected:
     void K2_OnTargetEffectApplied(AActor* HitActor, FActionCombatRecordedHit RecordedHit, int32 HitIndex);
 
 private:
+    void EnsureDefaultGameplayEventTriggers();
     void BuildActivationAttackSnapshot();
     void ResetActivationAttackSnapshot();
     FActionCombatAttackSnapshot MakeAttackSnapshot() const;

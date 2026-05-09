@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Components/ActorComponent.h"
+#include "Engine/EngineTypes.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "UObject/SoftObjectPtr.h"
 
@@ -233,6 +234,9 @@ protected:
     FName ReactionSlotName = TEXT("FullBody");
 
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Action Combat|Reaction|Animation")
+    FComponentReference AnimationMeshComponent;
+
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Action Combat|Reaction|Animation")
     bool bStopPreviousReactionAnimation = true;
 
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Action Combat|Reaction|Animation")
@@ -293,6 +297,8 @@ private:
     void ApplyReplicatedReactionLocation(EActionCombatReactionState NewState, const FVector& WorldSpaceActorLocation);
     const FActionCombatReactionAnimation* FindReactionAnimation(EActionCombatReactionState ReactionState, EActionCombatReactionDirection Direction) const;
     EActionCombatReactionDirection ResolveReactionDirection(const FVector& WorldSpaceImpulseDirection) const;
+    UAnimMontage* ResolvePlayableReactionMontage(UAnimMontage* SourceMontage);
+    bool ShouldUseReactionSlotOverride(const UAnimMontage* SourceMontage) const;
     USkeletalMeshComponent* ResolveAnimationMesh(const FActionCombatReactionAnimation* ReactionAnimation) const;
     bool IsAnimationCompatibleWithMesh(const USkeletalMeshComponent* MeshComponent, const FActionCombatReactionAnimation* ReactionAnimation) const;
     float GetReactionAnimationPlayLengthSeconds(EActionCombatReactionState ReactionState, const FVector& WorldSpaceImpulseDirection, float FallbackSeconds) const;
@@ -316,6 +322,8 @@ private:
     UPROPERTY(Transient)
     TObjectPtr<UAnimMontage> HeldKnockdownMontage;
     TWeakObjectPtr<UAnimInstance> ActiveReactionAnimInstance;
+    UPROPERTY(Transient)
+    TMap<TObjectPtr<UAnimMontage>, TObjectPtr<UAnimMontage>> RuntimeReactionMontageOverrides;
     UPROPERTY(Replicated)
     EActionCombatReactionState ReplicatedReactionCueState = EActionCombatReactionState::None;
     UPROPERTY(Replicated)

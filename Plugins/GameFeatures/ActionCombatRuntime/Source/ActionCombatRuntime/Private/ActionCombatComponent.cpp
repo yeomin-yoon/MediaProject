@@ -22,6 +22,9 @@ namespace ActionCombatComponent
     static const FName FullBodyMontageSlotName(TEXT("FullBody"));
     static const FName DisableLegIKCurveName(TEXT("DisableLegIK"));
     static const FName UseFootPlacementPropertyName(TEXT("UseFootPlacement"));
+    static constexpr float MeaningfulRootMotionTranslationThresholdCm = 1.0f;
+    static constexpr float MeaningfulRootMotionRotationThreshold = 0.001f;
+    static constexpr float AttackAdvanceMeshCompensationRecoverySeconds = 0.12f;
 
     static void PrepareAnimInstanceForMontageRootMotion(UAnimInstance* AnimInstance)
     {
@@ -67,24 +70,38 @@ void UActionCombatComponent::TickComponent(float DeltaTime, ELevelTick TickType,
     {
         if (!ActiveActionState.ActionTag.IsValid())
         {
-            SetComponentTickEnabled(false);
+            TickAttackAdvanceMeshCompensationRecovery(DeltaTime);
+            if (!bAttackAdvanceMeshCompensationRecovering)
+            {
+                SetComponentTickEnabled(false);
+            }
             return;
         }
 
+        UpdateActiveActionProgress(DeltaTime);
         ApplyActiveActionAnimationOverrides();
+        MaintainActiveActionRotationLock();
+        TickClientAttackAdvanceVisuals(DeltaTime);
+        TickAttackAdvanceMeshCompensationRecovery(DeltaTime);
         return;
     }
 
     if (!ActiveActionState.ActionTag.IsValid() || !ActiveActionDefinition)
     {
-        SetComponentTickEnabled(false);
+        TickAttackAdvanceMeshCompensationRecovery(DeltaTime);
+        if (!bAttackAdvanceMeshCompensationRecovering)
+        {
+            SetComponentTickEnabled(false);
+        }
         return;
     }
 
     UpdateActiveActionProgress(DeltaTime);
     ApplyActiveActionAnimationOverrides();
+    MaintainActiveActionRotationLock();
     TickManualMontageRootMotion();
     TickAttackAdvance(DeltaTime);
+    TickAttackAdvanceMeshCompensationRecovery(DeltaTime);
     TryCommitPendingCommands();
 }
 
@@ -326,6 +343,11 @@ void UActionCombatComponent::InterruptActiveAction()
     LogCommandFlow(TEXT("ActiveActionInterrupted"));
 }
 
+USkeletalMeshComponent* UActionCombatComponent::GetAnimationMeshComponent() const
+{
+    return ResolveAnimationMesh();
+}
+
 void UActionCombatComponent::BroadcastReactionCueForActor(AActor* ReactionActor, EActionCombatReactionState NewState, FVector_NetQuantizeNormal WorldSpaceImpulseDirection, FVector_NetQuantize WorldSpaceActorLocation, int32 CueId)
 {
     const AActor* Owner = GetOwner();
@@ -380,13 +402,18 @@ void UActionCombatComponent::OnRep_ReplicatedState()
 
     if (!ReplicatedState.ActiveActionTag.IsValid())
     {
+        StartAttackAdvanceMeshCompensationRecovery();
         ActiveActionState.Reset();
+        ActiveActionDefinition = nullptr;
+        ActiveActionSourceStyle = nullptr;
         ResetActionAnimationOverrides();
+        ResetActiveActionRotationLock();
     }
     else
     {
         if ((PreviousState.ActionInstanceId != ReplicatedState.ActionInstanceId) || (PreviousState.ActionTag != ReplicatedState.ActiveActionTag))
         {
+            ResetAttackAdvanceMeshCompensation(true);
             ActiveActionState.Reset();
         }
 
@@ -395,10 +422,15 @@ void UActionCombatComponent::OnRep_ReplicatedState()
         ActiveActionState.EffectivePlayRate = ReplicatedState.EffectivePlayRate;
         ActiveActionState.bStartedWhileFocusActive = bFocusActive;
         ActiveActionState.bUsingMontageTiming = ReplicatedState.ActiveMontage != nullptr;
+        ActiveActionState.AttackAdvanceAppliedDistance = ReplicatedState.AttackAdvanceAppliedDistance;
+        ActiveActionState.AttackAdvanceDirection = ReplicatedState.AttackAdvanceDirection;
+        ActiveActionState.bAttackAdvanceBlocked = ReplicatedState.bAttackAdvanceBlocked;
 
         const UActionCombatStyleData* SourceStyle = nullptr;
         if (const FActionCombatActionDefinition* ReplicatedActionDefinition = FindActionDefinitionInLayers(ReplicatedState.ActiveActionTag, SourceStyle))
         {
+            ActiveActionDefinition = ReplicatedActionDefinition;
+            ActiveActionSourceStyle = SourceStyle;
             ActiveActionState.TraceSourceId = ReplicatedActionDefinition->TraceSourceId;
             ActiveActionState.HitWindowName = ReplicatedActionDefinition->HitWindowName;
             ActiveActionState.MotionValue = ReplicatedActionDefinition->MotionValue;
@@ -407,18 +439,22 @@ void UActionCombatComponent::OnRep_ReplicatedState()
         }
         else
         {
+            ActiveActionDefinition = nullptr;
+            ActiveActionSourceStyle = nullptr;
             ActiveActionState.TraceSourceId = NAME_None;
             ActiveActionState.HitWindowName = NAME_None;
             ActiveActionState.MotionValue = 1.0f;
             ActiveActionState.PoiseDamage = 0.0f;
             ActiveActionState.BuildupMultiplier = 1.0f;
         }
+
+        ApplyActiveActionRotationLock();
     }
 
     if (!HasRuntimeAuthority())
     {
         SyncReplicatedMontage();
-        SetComponentTickEnabled(ActiveActionState.ActionTag.IsValid());
+        SetComponentTickEnabled(ActiveActionState.ActionTag.IsValid() || bAttackAdvanceMeshCompensationRecovering);
     }
 
     if (PreviousState.ActionInstanceId != ActiveActionState.ActionInstanceId)
@@ -487,7 +523,7 @@ bool UActionCombatComponent::HandleCommandRequestInternal(const FActionCombatBuf
     return true;
 }
 
-bool UActionCombatComponent::ResolveTransitionAndStart(const FGameplayTag& FromActionTag, const FActionCombatBufferedCommandState& CommandRequest)
+bool UActionCombatComponent::ResolveTransitionAndStart(FGameplayTag FromActionTag, const FActionCombatBufferedCommandState& CommandRequest)
 {
     const FActionCombatTransitionDefinition* Transition = FindTransitionInLayers(FromActionTag, CommandRequest);
     if (!Transition)
@@ -530,6 +566,7 @@ bool UActionCombatComponent::StartActionFromDefinition(const FActionCombatAction
     if (bHadActiveAction)
     {
         EndActiveAction(true);
+        ResetAttackAdvanceMeshCompensation(true);
     }
 
     ActiveActionDefinition = ActionDefinition;
@@ -548,6 +585,7 @@ bool UActionCombatComponent::StartActionFromDefinition(const FActionCombatAction
     ActiveActionState.PoiseDamage = ActionDefinition->PoiseDamage;
     ActiveActionState.BuildupMultiplier = ActionDefinition->BuildupMultiplier;
     InitializeAttackAdvanceForAction();
+    ApplyActiveActionRotationLock();
 
     if (bAutoPlayMontages && ActionDefinition->Montage)
     {
@@ -609,8 +647,10 @@ void UActionCombatComponent::EndActiveAction(bool bWasInterrupted)
     ActiveActionStylePlayRateSnapshot = 1.0f;
     ResetManualMontageRootMotion();
     ResetActionAnimationOverrides();
+    ResetActiveActionRotationLock();
+    StartAttackAdvanceMeshCompensationRecovery();
 
-    if (!BufferedCommand.IsValid() && !PendingInterruptCommand.IsValid())
+    if (!BufferedCommand.IsValid() && !PendingInterruptCommand.IsValid() && !bAttackAdvanceMeshCompensationRecovering)
     {
         SetComponentTickEnabled(false);
     }
@@ -747,7 +787,26 @@ void UActionCombatComponent::ResetManualMontageRootMotion()
 bool UActionCombatComponent::ShouldManuallyDriveMontageRootMotion(const UAnimMontage* PlayableMontage) const
 {
     const AActor* Owner = GetOwner();
-    return Owner && Owner->HasAuthority() && PlayableMontage && PlayableMontage->HasRootMotion();
+    return Owner && Owner->HasAuthority() && DoesMontageHaveMeaningfulRootMotion(PlayableMontage);
+}
+
+bool UActionCombatComponent::DoesMontageHaveMeaningfulRootMotion(const UAnimMontage* PlayableMontage)
+{
+    if (!PlayableMontage || !PlayableMontage->HasRootMotion())
+    {
+        return false;
+    }
+
+    const float MontageLength = PlayableMontage->GetPlayLength();
+    if (MontageLength <= KINDA_SMALL_NUMBER)
+    {
+        return false;
+    }
+
+    const FTransform ExtractedRootMotion = PlayableMontage->ExtractRootMotionFromTrackRange(0.0f, MontageLength);
+    const FVector Translation = ExtractedRootMotion.GetTranslation();
+    return Translation.SizeSquared2D() > FMath::Square(ActionCombatComponent::MeaningfulRootMotionTranslationThresholdCm)
+        || !ExtractedRootMotion.GetRotation().IsIdentity(ActionCombatComponent::MeaningfulRootMotionRotationThreshold);
 }
 
 void UActionCombatComponent::ConfigureAnimationTickPrerequisite()
@@ -799,6 +858,95 @@ void UActionCombatComponent::ResetActionAnimationOverrides()
             ApplyFootPlacementOverride(LinkedAnimInstance, false);
         }
     }
+}
+
+void UActionCombatComponent::ApplyActiveActionRotationLock()
+{
+    if (bRotationLockApplied)
+    {
+        return;
+    }
+
+    ACharacter* Character = Cast<ACharacter>(GetOwner());
+    if (!Character)
+    {
+        return;
+    }
+
+    RotationLockCharacter = Character;
+    LockedActionActorRotation = Character->GetActorRotation();
+    bSavedUseControllerRotationPitch = Character->bUseControllerRotationPitch;
+    bSavedUseControllerRotationYaw = Character->bUseControllerRotationYaw;
+    bSavedUseControllerRotationRoll = Character->bUseControllerRotationRoll;
+
+    if (UCharacterMovementComponent* MovementComponent = Character->GetCharacterMovement())
+    {
+        bSavedOrientRotationToMovement = MovementComponent->bOrientRotationToMovement;
+        bSavedUseControllerDesiredRotation = MovementComponent->bUseControllerDesiredRotation;
+        MovementComponent->bOrientRotationToMovement = false;
+        MovementComponent->bUseControllerDesiredRotation = false;
+    }
+
+    Character->bUseControllerRotationPitch = false;
+    Character->bUseControllerRotationYaw = false;
+    Character->bUseControllerRotationRoll = false;
+    bRotationLockApplied = true;
+}
+
+void UActionCombatComponent::MaintainActiveActionRotationLock()
+{
+    if (!bRotationLockApplied || !ActiveActionState.ActionTag.IsValid())
+    {
+        return;
+    }
+
+    ACharacter* Character = RotationLockCharacter.Get();
+    if (!Character)
+    {
+        Character = Cast<ACharacter>(GetOwner());
+    }
+
+    if (!Character)
+    {
+        return;
+    }
+
+    FRotator CurrentRotation = Character->GetActorRotation();
+    CurrentRotation.Yaw = LockedActionActorRotation.Yaw;
+    CurrentRotation.Pitch = 0.0f;
+    CurrentRotation.Roll = 0.0f;
+    Character->SetActorRotation(CurrentRotation);
+}
+
+void UActionCombatComponent::ResetActiveActionRotationLock()
+{
+    if (!bRotationLockApplied)
+    {
+        return;
+    }
+
+    ACharacter* Character = RotationLockCharacter.Get();
+    if (!Character)
+    {
+        Character = Cast<ACharacter>(GetOwner());
+    }
+
+    if (Character)
+    {
+        Character->bUseControllerRotationPitch = bSavedUseControllerRotationPitch;
+        Character->bUseControllerRotationYaw = bSavedUseControllerRotationYaw;
+        Character->bUseControllerRotationRoll = bSavedUseControllerRotationRoll;
+
+        if (UCharacterMovementComponent* MovementComponent = Character->GetCharacterMovement())
+        {
+            MovementComponent->bOrientRotationToMovement = bSavedOrientRotationToMovement;
+            MovementComponent->bUseControllerDesiredRotation = bSavedUseControllerDesiredRotation;
+        }
+    }
+
+    RotationLockCharacter.Reset();
+    LockedActionActorRotation = FRotator::ZeroRotator;
+    bRotationLockApplied = false;
 }
 
 void UActionCombatComponent::ApplyFootPlacementOverride(UAnimInstance* AnimInstance, bool bDisableFootPlacement)
@@ -878,7 +1026,7 @@ void UActionCombatComponent::TickAttackAdvance(float DeltaTime)
     {
         if (UAnimMontage* PlayableMontage = ResolvePlayableMontage(ActiveActionDefinition->Montage))
         {
-            if (PlayableMontage->HasRootMotion())
+            if (DoesMontageHaveMeaningfulRootMotion(PlayableMontage))
             {
                 return;
             }
@@ -926,6 +1074,7 @@ void UActionCombatComponent::TickAttackAdvance(float DeltaTime)
     const FVector ActualDelta = Owner->GetActorLocation() - PreviousLocation;
     const float ActualDistance = FVector::DotProduct(ActualDelta, ActiveActionState.AttackAdvanceDirection);
     ActiveActionState.AttackAdvanceAppliedDistance += FMath::Max(ActualDistance, 0.0f);
+    SetAttackAdvanceMeshCompensationDistance(ActiveActionState.AttackAdvanceAppliedDistance);
 
     if (AttackAdvance.bStopOnBlockingHit && MoveHit.IsValidBlockingHit())
     {
@@ -934,14 +1083,64 @@ void UActionCombatComponent::TickAttackAdvance(float DeltaTime)
 
     if ((ActualDistance > KINDA_SMALL_NUMBER) || MoveHit.IsValidBlockingHit())
     {
+        UpdateReplicatedStateFromLocal();
         Owner->ForceNetUpdate();
     }
+}
+
+void UActionCombatComponent::TickClientAttackAdvanceVisuals(float DeltaTime)
+{
+    (void)DeltaTime;
+
+    AActor* Owner = GetOwner();
+    if (!Owner || Owner->HasAuthority() || !ActiveActionDefinition || !ActiveActionState.ActionTag.IsValid())
+    {
+        return;
+    }
+
+    const FActionCombatAttackAdvanceSettings& AttackAdvance = ActiveActionDefinition->AttackAdvance;
+    if (!AttackAdvance.bEnabled || !AttackAdvance.bCompensateMeshOffset || AttackAdvance.Distance <= 0.0f)
+    {
+        return;
+    }
+
+    if (bAutoPlayMontages && ActiveActionDefinition->Montage)
+    {
+        if (UAnimMontage* PlayableMontage = ResolvePlayableMontage(ActiveActionDefinition->Montage))
+        {
+            if (DoesMontageHaveMeaningfulRootMotion(PlayableMontage))
+            {
+                return;
+            }
+        }
+    }
+
+    if (ActiveActionState.AttackAdvanceDirection.IsNearlyZero())
+    {
+        ActiveActionState.AttackAdvanceDirection = ResolveAttackAdvanceDirection();
+    }
+
+    if (!CanApplyAttackAdvance())
+    {
+        return;
+    }
+
+    const float DesiredDistance = ActiveActionState.bAttackAdvanceBlocked
+        ? ActiveActionState.AttackAdvanceAppliedDistance
+        : FMath::Max(ActiveActionState.AttackAdvanceAppliedDistance, CalculateAttackAdvanceDesiredDistance());
+    if (DesiredDistance <= KINDA_SMALL_NUMBER)
+    {
+        return;
+    }
+
+    ActiveActionState.AttackAdvanceAppliedDistance = DesiredDistance;
+    SetAttackAdvanceMeshCompensationDistance(DesiredDistance);
 }
 
 bool UActionCombatComponent::CanApplyAttackAdvance() const
 {
     const AActor* Owner = GetOwner();
-    if (!Owner || !Owner->HasAuthority() || !ActiveActionDefinition)
+    if (!Owner || !ActiveActionDefinition)
     {
         return false;
     }
@@ -965,6 +1164,31 @@ bool UActionCombatComponent::CanApplyAttackAdvance() const
     }
 
     return MoveComp->MovementMode == MOVE_Walking || MoveComp->MovementMode == MOVE_NavWalking;
+}
+
+float UActionCombatComponent::CalculateAttackAdvanceDesiredDistance() const
+{
+    if (!ActiveActionDefinition)
+    {
+        return 0.0f;
+    }
+
+    const FActionCombatAttackAdvanceSettings& AttackAdvance = ActiveActionDefinition->AttackAdvance;
+    if (!AttackAdvance.bEnabled || AttackAdvance.Distance <= 0.0f)
+    {
+        return 0.0f;
+    }
+
+    const float StartTime = FMath::Clamp(AttackAdvance.StartNormalizedTime, 0.0f, 1.0f);
+    const float EndTime = FMath::Clamp(AttackAdvance.EndNormalizedTime, 0.0f, 1.0f);
+    if (EndTime <= StartTime + KINDA_SMALL_NUMBER || ActiveActionState.NormalizedProgress <= StartTime)
+    {
+        return 0.0f;
+    }
+
+    const float WindowAlpha = FMath::Clamp((ActiveActionState.NormalizedProgress - StartTime) / (EndTime - StartTime), 0.0f, 1.0f);
+    const float CurvedAlpha = FMath::Pow(WindowAlpha, FMath::Max(AttackAdvance.CurveExponent, 0.1f));
+    return AttackAdvance.Distance * CurvedAlpha;
 }
 
 FVector UActionCombatComponent::ResolveAttackAdvanceDirection() const
@@ -1002,6 +1226,117 @@ bool UActionCombatComponent::MoveOwnerForAttackAdvance(const FVector& Delta, FHi
 
     Owner->AddActorWorldOffset(Delta, true, &OutHit, ETeleportType::None);
     return true;
+}
+
+void UActionCombatComponent::SetAttackAdvanceMeshCompensationDistance(float Distance)
+{
+    if (!ActiveActionDefinition || !ActiveActionDefinition->AttackAdvance.bCompensateMeshOffset)
+    {
+        return;
+    }
+
+    if (ActiveActionState.AttackAdvanceDirection.IsNearlyZero())
+    {
+        ActiveActionState.AttackAdvanceDirection = ResolveAttackAdvanceDirection();
+    }
+
+    if (ActiveActionState.AttackAdvanceDirection.IsNearlyZero())
+    {
+        return;
+    }
+
+    USkeletalMeshComponent* MeshComponent = ResolveAnimationMesh();
+    if (!MeshComponent)
+    {
+        return;
+    }
+
+    if (!bAttackAdvanceMeshCompensationActive || AttackAdvanceCompensatedMesh.Get() != MeshComponent)
+    {
+        AttackAdvanceCompensatedMesh = MeshComponent;
+        AttackAdvanceBaseMeshRelativeLocation = MeshComponent->GetRelativeLocation();
+        AttackAdvanceMeshCompensationOffset = FVector::ZeroVector;
+        bAttackAdvanceMeshCompensationActive = true;
+    }
+
+    bAttackAdvanceMeshCompensationRecovering = false;
+
+    const FVector WorldOffset = -ActiveActionState.AttackAdvanceDirection * FMath::Max(Distance, 0.0f);
+    const USceneComponent* ParentComponent = MeshComponent->GetAttachParent();
+    const FVector LocalOffset = ParentComponent
+        ? ParentComponent->GetComponentTransform().InverseTransformVectorNoScale(WorldOffset)
+        : WorldOffset;
+
+    AttackAdvanceMeshCompensationOffset = LocalOffset;
+    MeshComponent->SetRelativeLocation(AttackAdvanceBaseMeshRelativeLocation + AttackAdvanceMeshCompensationOffset);
+}
+
+void UActionCombatComponent::StartAttackAdvanceMeshCompensationRecovery()
+{
+    if (!bAttackAdvanceMeshCompensationActive && !bAttackAdvanceMeshCompensationRecovering)
+    {
+        return;
+    }
+
+    if (AttackAdvanceMeshCompensationOffset.IsNearlyZero())
+    {
+        ResetAttackAdvanceMeshCompensation(true);
+        return;
+    }
+
+    AttackAdvanceMeshCompensationRecoveryStartOffset = AttackAdvanceMeshCompensationOffset;
+    AttackAdvanceMeshCompensationRecoveryElapsed = 0.0f;
+    bAttackAdvanceMeshCompensationActive = false;
+    bAttackAdvanceMeshCompensationRecovering = true;
+    SetComponentTickEnabled(true);
+}
+
+void UActionCombatComponent::TickAttackAdvanceMeshCompensationRecovery(float DeltaTime)
+{
+    if (!bAttackAdvanceMeshCompensationRecovering)
+    {
+        return;
+    }
+
+    USkeletalMeshComponent* MeshComponent = AttackAdvanceCompensatedMesh.Get();
+    if (!MeshComponent)
+    {
+        ResetAttackAdvanceMeshCompensation(false);
+        return;
+    }
+
+    AttackAdvanceMeshCompensationRecoveryElapsed += FMath::Max(DeltaTime, 0.0f);
+    const float Alpha = FMath::Clamp(
+        AttackAdvanceMeshCompensationRecoveryElapsed / ActionCombatComponent::AttackAdvanceMeshCompensationRecoverySeconds,
+        0.0f,
+        1.0f);
+    const float SmoothAlpha = Alpha * Alpha * (3.0f - 2.0f * Alpha);
+    AttackAdvanceMeshCompensationOffset = FMath::Lerp(AttackAdvanceMeshCompensationRecoveryStartOffset, FVector::ZeroVector, SmoothAlpha);
+    MeshComponent->SetRelativeLocation(AttackAdvanceBaseMeshRelativeLocation + AttackAdvanceMeshCompensationOffset);
+
+    if (Alpha >= 1.0f - KINDA_SMALL_NUMBER)
+    {
+        ResetAttackAdvanceMeshCompensation(true);
+    }
+}
+
+void UActionCombatComponent::ResetAttackAdvanceMeshCompensation(bool bRestoreMeshLocation)
+{
+    if (bRestoreMeshLocation)
+    {
+        if (USkeletalMeshComponent* MeshComponent = AttackAdvanceCompensatedMesh.Get())
+        {
+            MeshComponent->SetRelativeLocation(AttackAdvanceBaseMeshRelativeLocation);
+        }
+    }
+
+    AttackAdvanceCompensatedMesh.Reset();
+    AttackAdvanceBaseMeshRelativeLocation = FVector::ZeroVector;
+    AttackAdvanceMeshCompensationOffset = FVector::ZeroVector;
+    AttackAdvanceMeshCompensationRecoveryStartOffset = FVector::ZeroVector;
+    AttackAdvanceMeshCompensationRecoveryElapsed = 0.0f;
+    bAttackAdvanceMeshCompensationActive = false;
+    bAttackAdvanceMeshCompensationRecovering = false;
 }
 
 void UActionCombatComponent::TryCommitPendingCommands()
@@ -1222,6 +1557,9 @@ void UActionCombatComponent::UpdateReplicatedStateFromLocal()
     ReplicatedState.bFocusActive = bFocusActive;
     ReplicatedState.EffectivePlayRate = ActiveActionState.EffectivePlayRate;
     ReplicatedState.ActiveMontage = (ActiveActionDefinition != nullptr) ? ActiveActionDefinition->Montage : nullptr;
+    ReplicatedState.AttackAdvanceAppliedDistance = ActiveActionState.AttackAdvanceAppliedDistance;
+    ReplicatedState.AttackAdvanceDirection = ActiveActionState.AttackAdvanceDirection;
+    ReplicatedState.bAttackAdvanceBlocked = ActiveActionState.bAttackAdvanceBlocked;
 
     float ElapsedUnscaledSeconds = 0.0f;
     if (ActiveActionDefinition != nullptr)

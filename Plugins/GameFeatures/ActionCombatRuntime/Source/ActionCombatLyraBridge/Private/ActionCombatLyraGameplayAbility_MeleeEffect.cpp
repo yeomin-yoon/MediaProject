@@ -31,6 +31,37 @@ UActionCombatLyraGameplayAbility_MeleeEffect::UActionCombatLyraGameplayAbility_M
     SnapshotDamageEffectClass = UActionCombatGameplayEffect_WeaponDamage::StaticClass();
     DamageMultiplierSetByCallerTag = ActionCombatLyraBridgeTags::SetByCaller_DamageMultiplier;
     TargetDodgeIFrameTag = ActionCombatLyraBridgeTags::Combat_State_Dodge_IFrame;
+    ActionEndedEventTag = FGameplayTag::RequestGameplayTag(TEXT("Combat.GameplayEvent.Action.Ended"), false);
+    EnsureDefaultGameplayEventTriggers();
+}
+
+void UActionCombatLyraGameplayAbility_MeleeEffect::PostLoad()
+{
+    Super::PostLoad();
+    EnsureDefaultGameplayEventTriggers();
+}
+
+void UActionCombatLyraGameplayAbility_MeleeEffect::EnsureDefaultGameplayEventTriggers()
+{
+    const FGameplayTag ActionStartedEventTag = FGameplayTag::RequestGameplayTag(TEXT("Combat.GameplayEvent.Action.Started"), false);
+    if (!ActionStartedEventTag.IsValid())
+    {
+        return;
+    }
+
+    for (const FAbilityTriggerData& TriggerData : AbilityTriggers)
+    {
+        if ((TriggerData.TriggerSource == EGameplayAbilityTriggerSource::GameplayEvent)
+            && TriggerData.TriggerTag.MatchesTagExact(ActionStartedEventTag))
+        {
+            return;
+        }
+    }
+
+    FAbilityTriggerData TriggerData;
+    TriggerData.TriggerSource = EGameplayAbilityTriggerSource::GameplayEvent;
+    TriggerData.TriggerTag = ActionStartedEventTag;
+    AbilityTriggers.Add(TriggerData);
 }
 
 void UActionCombatLyraGameplayAbility_MeleeEffect::ActivateAbility(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo, const FGameplayAbilityActivationInfo ActivationInfo, const FGameplayEventData* TriggerEventData)
