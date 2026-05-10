@@ -486,26 +486,14 @@ void UActionCombatLyraGameplayAbility_MeleeEffect::TryApplyReactionToRecordedHit
         return;
     }
 
-    UActionCombatReactionComponent* ReactionComponent = UActionCombatReactionComponent::FindOrCreateReactionComponent(HitActor);
-    if (ReactionComponent == nullptr)
-    {
-        return;
-    }
-
-    FVector ImpulseDirection = (HitActor->GetActorLocation() - AvatarActor->GetActorLocation()).GetSafeNormal2D();
-    if (ImpulseDirection.IsNearlyZero())
-    {
-        ImpulseDirection = AvatarActor->GetActorForwardVector().GetSafeNormal2D();
-    }
-
-    FActionCombatReactionHit ReactionHit;
-    ReactionHit.PoiseDamage = ResolvedPoiseDamage;
-    ReactionHit.KnockdownPower = ResolvedPoiseDamage;
-    ReactionHit.WorldSpaceImpulseDirection = ImpulseDirection;
-    ReactionHit.InstigatorActor = const_cast<AActor*>(AvatarActor);
-
     FActionCombatReactionResult ReactionResult;
-    if (ReactionComponent->TryApplyReactionHit(ReactionHit, ReactionResult))
+    if (UActionCombatReactionComponent::ApplyReactionHitToActor(
+        HitActor,
+        const_cast<AActor*>(AvatarActor),
+        ResolvedPoiseDamage,
+        ResolvedPoiseDamage,
+        FVector::ZeroVector,
+        ReactionResult))
     {
         UE_LOG(
             LogActionCombatRuntime,

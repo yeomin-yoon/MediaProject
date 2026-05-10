@@ -105,6 +105,9 @@ protected:
     bool bSearchAbilityInputActionsAsFallback = false;
 
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Action Combat|Lyra Bridge")
+    bool bPollRightMouseButtonForSecondary = true;
+
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Action Combat|Lyra Bridge")
     TArray<FActionCombatLyraInputBinding> InputBindings;
 
 private:
@@ -113,6 +116,12 @@ private:
     void HandleInputStarted(FGameplayTag InputTag);
     void HandleInputTriggered(FGameplayTag InputTag);
     void HandleInputCompleted(FGameplayTag InputTag);
+    void BindRawSecondaryKeyInput(UInputComponent* InputComponent);
+    void UnbindRawSecondaryKeyInput();
+    void HandleRawSecondaryPressed();
+    void HandleRawSecondaryReleased();
+    void PollRawSecondaryInput();
+    void ProcessRawHeldRepeat(FGameplayTag InputTag);
     void ApplyStartedBinding(const FActionCombatLyraInputBinding& Binding);
     void ApplyRepeatedStartedCommand(const FActionCombatLyraInputBinding& Binding);
     void ApplyCompletedBinding(const FActionCombatLyraInputBinding& Binding);
@@ -127,4 +136,15 @@ private:
     TWeakObjectPtr<UInputComponent> BoundInputComponent;
     TArray<uint32> BoundInputHandles;
     TMap<FGameplayTag, double> NextRepeatCommandTimeByInputTag;
+    TMap<FGameplayTag, double> LastStartedInputTimeByInputTag;
+
+    struct FRawSecondaryKeyBinding
+    {
+        TWeakObjectPtr<UInputComponent> InputComponent;
+        int32 PressedBindingIndex = INDEX_NONE;
+        int32 ReleasedBindingIndex = INDEX_NONE;
+    };
+
+    TArray<FRawSecondaryKeyBinding> RawSecondaryKeyBindings;
+    bool bWasRawSecondaryInputDown = false;
 };

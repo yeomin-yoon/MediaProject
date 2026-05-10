@@ -161,6 +161,13 @@ public:
     bool IsInReactionState() const;
 
     bool TryApplyReactionHit(const FActionCombatReactionHit& IncomingHit, FActionCombatReactionResult& OutResult);
+
+    UFUNCTION(BlueprintCallable, Category = "Action Combat|Reaction")
+    bool ApplyReactionHit(AActor* InstigatorActor, float PoiseDamage, float KnockdownPower, FVector WorldSpaceImpulseDirection, FActionCombatReactionResult& OutResult);
+
+    UFUNCTION(BlueprintCallable, Category = "Action Combat|Reaction")
+    static bool ApplyReactionHitToActor(AActor* TargetActor, AActor* InstigatorActor, float PoiseDamage, float KnockdownPower, FVector WorldSpaceImpulseDirection, FActionCombatReactionResult& OutResult);
+
     void PlayReplicatedReactionCue(EActionCombatReactionState NewState, FVector_NetQuantizeNormal WorldSpaceImpulseDirection, FVector_NetQuantize WorldSpaceActorLocation, int32 CueId);
 
     UFUNCTION(BlueprintCallable, Category = "Action Combat|Reaction")

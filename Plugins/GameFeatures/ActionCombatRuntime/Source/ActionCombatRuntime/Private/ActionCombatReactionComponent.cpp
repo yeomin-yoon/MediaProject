@@ -364,6 +364,29 @@ bool UActionCombatReactionComponent::TryApplyReactionHit(const FActionCombatReac
     return OutResult.Outcome != EActionCombatReactionOutcome::None;
 }
 
+bool UActionCombatReactionComponent::ApplyReactionHit(AActor* InstigatorActor, float PoiseDamage, float KnockdownPower, FVector WorldSpaceImpulseDirection, FActionCombatReactionResult& OutResult)
+{
+    FActionCombatReactionHit ReactionHit;
+    ReactionHit.PoiseDamage = PoiseDamage;
+    ReactionHit.KnockdownPower = KnockdownPower;
+    ReactionHit.WorldSpaceImpulseDirection = ResolveImpulseDirection(InstigatorActor, WorldSpaceImpulseDirection);
+    ReactionHit.InstigatorActor = InstigatorActor;
+
+    return TryApplyReactionHit(ReactionHit, OutResult);
+}
+
+bool UActionCombatReactionComponent::ApplyReactionHitToActor(AActor* TargetActor, AActor* InstigatorActor, float PoiseDamage, float KnockdownPower, FVector WorldSpaceImpulseDirection, FActionCombatReactionResult& OutResult)
+{
+    OutResult = FActionCombatReactionResult();
+
+    if (UActionCombatReactionComponent* ReactionComponent = FindOrCreateReactionComponent(TargetActor))
+    {
+        return ReactionComponent->ApplyReactionHit(InstigatorActor, PoiseDamage, KnockdownPower, WorldSpaceImpulseDirection, OutResult);
+    }
+
+    return false;
+}
+
 bool UActionCombatReactionComponent::ForceKnockdown(AActor* InstigatorActor, FVector WorldSpaceImpulseDirection)
 {
     return ForceKnockdownInternal(InstigatorActor, WorldSpaceImpulseDirection, nullptr);
