@@ -2,6 +2,8 @@
 #include "Minion/MinionAIController.h"
 #include "AbilitySystem/LyraAbilitySet.h"
 #include "AbilitySystem/LyraAbilitySystemComponent.h"
+#include "AbilitySystemComponent.h"
+#include "Character/LyraHealthComponent.h"
 
 AMinionCharacterBase::AMinionCharacterBase(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
@@ -26,4 +28,9 @@ void AMinionCharacterBase::BeginPlay()
 	}
 
 	MinionAbilitySet->GiveToAbilitySystem(MinionASC, nullptr);
+
+	if (ULyraHealthComponent* HealthComp = ULyraHealthComponent::FindHealthComponent(this))
+	{
+		HealthComp->InitializeWithAbilitySystem(MinionASC);
+	}
 }
