@@ -38,6 +38,9 @@ protected:
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Action Combat|Lobby Cosmetics", meta = (ClampMin = "1"))
     int32 MaxApplyAttempts = 120;
 
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Action Combat|Lobby Cosmetics", meta = (ClampMin = "0"))
+    int32 InitialForcedReapplyAttempts = 30;
+
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Action Combat|Lobby Cosmetics", meta = (ClampMin = "0.01"))
     float RetryIntervalSeconds = 0.1f;
 
@@ -60,6 +63,7 @@ private:
 
     FTimerHandle RetryTimerHandle;
     int32 ApplyAttempts = 0;
+    int32 SuccessfulInitialReapplyAttempts = 0;
     int32 LastAppliedRevision = INDEX_NONE;
     TWeakObjectPtr<ULyraLobbyPlayerStateComponent> BoundLobbyPlayerStateComponent;
 };

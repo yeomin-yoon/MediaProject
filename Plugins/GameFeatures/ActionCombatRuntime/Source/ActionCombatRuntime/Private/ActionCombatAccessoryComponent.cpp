@@ -127,6 +127,8 @@ void UActionCombatAccessoryComponent::GetLifetimeReplicatedProps(TArray<FLifetim
     Super::GetLifetimeReplicatedProps(OutLifetimeProps);
 
     DOREPLIFETIME(ThisClass, EquippedAccessories);
+    DOREPLIFETIME(ThisClass, AccessoryVisualSyncRevision);
+    DOREPLIFETIME(ThisClass, AuthoritativeAccessoryEntryCount);
 }
 
 bool UActionCombatAccessoryComponent::RequestEquipAccessory(UActionCombatAccessoryData* AccessoryData)
@@ -199,6 +201,12 @@ UActionCombatAppearanceComponent* UActionCombatAccessoryComponent::GetAppearance
     return ResolveAppearanceComponent();
 }
 
+void UActionCombatAccessoryComponent::OnRep_AccessoryVisualSync()
+{
+    RefreshAccessoryVisuals();
+    OnAccessoryVisualsChanged.Broadcast();
+}
+
 void UActionCombatAccessoryComponent::HandleReplicatedAccessoriesChanged()
 {
     RefreshAccessoryVisuals();
@@ -246,11 +254,26 @@ bool UActionCombatAccessoryComponent::HandleEquipRequest(const FSoftObjectPath& 
     const bool bChanged = EquippedAccessories.SetEntry(AccessoryData->GetSlotTag(), AccessoryRef);
     if (!bChanged)
     {
-        return false;
+        if (!SpawnedAccessoryVisuals.Contains(AccessoryData->GetSlotTag()))
+        {
+            RefreshAccessoryVisuals();
+        }
+
+        UE_LOG(LogActionCombatRuntime, Verbose, TEXT("AccessoryComponent on %s kept existing accessory %s for slot %s."),
+            *GetPathNameSafe(GetOwner()),
+            *GetPathNameSafe(AccessoryData),
+            *AccessoryData->GetSlotTag().ToString());
+        MarkAccessoryVisualStateDirty();
+        return true;
     }
 
     RefreshAccessoryVisuals();
+    MarkAccessoryVisualStateDirty();
     OnAccessoryVisualsChanged.Broadcast();
+    UE_LOG(LogActionCombatRuntime, Log, TEXT("AccessoryComponent on %s equipped %s in slot %s."),
+        *GetPathNameSafe(GetOwner()),
+        *GetPathNameSafe(AccessoryData),
+        *AccessoryData->GetSlotTag().ToString());
     return true;
 }
 
@@ -263,20 +286,39 @@ bool UActionCombatAccessoryComponent::HandleUnequipRequest(const FGameplayTag& S
     }
 
     RefreshAccessoryVisuals();
+    MarkAccessoryVisualStateDirty();
     OnAccessoryVisualsChanged.Broadcast();
+    UE_LOG(LogActionCombatRuntime, Log, TEXT("AccessoryComponent on %s unequipped slot %s."),
+        *GetPathNameSafe(GetOwner()),
+        *SlotTag.ToString());
     return true;
 }
 
 void UActionCombatAccessoryComponent::HandleClearRequest()
 {
     const bool bChanged = EquippedAccessories.ClearEntries();
-    if (!bChanged)
+    RefreshAccessoryVisuals();
+    MarkAccessoryVisualStateDirty();
+    OnAccessoryVisualsChanged.Broadcast();
+    UE_LOG(LogActionCombatRuntime, Log, TEXT("AccessoryComponent on %s cleared all accessories. Changed=%s"),
+        *GetPathNameSafe(GetOwner()),
+        bChanged ? TEXT("true") : TEXT("false"));
+}
+
+void UActionCombatAccessoryComponent::MarkAccessoryVisualStateDirty()
+{
+    if (!HasAuthorityForAccessories())
     {
         return;
     }
 
-    RefreshAccessoryVisuals();
-    OnAccessoryVisualsChanged.Broadcast();
+    AuthoritativeAccessoryEntryCount = EquippedAccessories.GetEntries().Num();
+    ++AccessoryVisualSyncRevision;
+
+    if (AActor* Owner = GetOwner())
+    {
+        Owner->ForceNetUpdate();
+    }
 }
 
 UActionCombatAccessoryData* UActionCombatAccessoryComponent::LoadAccessoryData(const FSoftObjectPath& AccessoryDataPath) const
@@ -343,6 +385,11 @@ void UActionCombatAccessoryComponent::RefreshAccessoryVisuals()
     DestroyAllSpawnedAccessoryVisuals();
 
     if (!GetOwner() || GetNetMode() == NM_DedicatedServer)
+    {
+        return;
+    }
+
+    if (!HasAuthorityForAccessories() && AuthoritativeAccessoryEntryCount == 0)
     {
         return;
     }
@@ -421,6 +468,9 @@ void UActionCombatAccessoryComponent::CreateVisualForEntry(const FActionCombatEq
             StaticMeshComponent->SetCollisionEnabled(ECollisionEnabled::NoCollision);
             StaticMeshComponent->SetGenerateOverlapEvents(false);
             StaticMeshComponent->SetCanEverAffectNavigation(false);
+            StaticMeshComponent->SetMobility(EComponentMobility::Movable);
+            StaticMeshComponent->SetHiddenInGame(false);
+            StaticMeshComponent->SetVisibility(true, true);
             StaticMeshComponent->SetupAttachment(AttachComponent, AttachSocket);
             StaticMeshComponent->SetRelativeTransform(AccessoryData->GetRelativeTransform());
             StaticMeshComponent->RegisterComponent();
@@ -437,6 +487,9 @@ void UActionCombatAccessoryComponent::CreateVisualForEntry(const FActionCombatEq
             SkeletalMeshComponent->SetCollisionEnabled(ECollisionEnabled::NoCollision);
             SkeletalMeshComponent->SetGenerateOverlapEvents(false);
             SkeletalMeshComponent->SetCanEverAffectNavigation(false);
+            SkeletalMeshComponent->SetMobility(EComponentMobility::Movable);
+            SkeletalMeshComponent->SetHiddenInGame(false);
+            SkeletalMeshComponent->SetVisibility(true, true);
             SkeletalMeshComponent->SetupAttachment(AttachComponent, AttachSocket);
             SkeletalMeshComponent->SetRelativeTransform(AccessoryData->GetRelativeTransform());
 
@@ -458,6 +511,14 @@ void UActionCombatAccessoryComponent::CreateVisualForEntry(const FActionCombatEq
     }
 
     SpawnedAccessoryVisuals.Add(Entry.SlotTag, SpawnedComponent);
+    UE_LOG(LogActionCombatRuntime, Log, TEXT("AccessoryComponent on %s spawned visual %s for accessory %s. Slot=%s Attach=%s Socket=%s Relative=%s"),
+        *GetPathNameSafe(GetOwner()),
+        *GetPathNameSafe(SpawnedComponent),
+        *GetPathNameSafe(AccessoryData),
+        *Entry.SlotTag.ToString(),
+        *GetPathNameSafe(AttachComponent),
+        *AttachSocket.ToString(),
+        *AccessoryData->GetRelativeTransform().ToHumanReadableString());
 }
 
 void UActionCombatAccessoryComponent::ApplyMaterialOverrides(UPrimitiveComponent* PrimitiveComponent, const TArray<TSoftObjectPtr<UMaterialInterface>>& MaterialOverrides) const

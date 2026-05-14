@@ -225,6 +225,24 @@ void ALyraPlayerController::RequestConnectedLobbyReadyToTravelToExperience(const
 	}
 }
 
+bool ALyraPlayerController::SubmitLocalLobbyLoadout(const FLyraLobbyPlayerLoadout& Loadout)
+{
+	UE_LOG(LogLyra, Log, TEXT("Lobby loadout submit requested. Context=%s PC=%s Authority=%s Revision=%d Slots=%d"),
+		*GetClientServerContextString(this),
+		*GetNameSafe(this),
+		HasAuthority() ? TEXT("true") : TEXT("false"),
+		Loadout.Revision,
+		Loadout.AccessorySlots.Num());
+
+	if (HasAuthority())
+	{
+		return ApplyLobbyLoadoutOnServer(Loadout);
+	}
+
+	ServerSubmitLocalLobbyLoadout(Loadout);
+	return true;
+}
+
 void ALyraPlayerController::ServerRequestConnectedLobbyTravelToExperience_Implementation(FPrimaryAssetId UserFacingExperienceId)
 {
 	if (!UserFacingExperienceId.IsValid())
@@ -259,6 +277,61 @@ void ALyraPlayerController::ServerRequestConnectedLobbyReadyToTravelToExperience
 
 	const ULyraUserFacingExperienceDefinition* UserFacingExperience = Cast<ULyraUserFacingExperienceDefinition>(ExperienceObject);
 	MarkLobbyReadyAndMaybeTravelToExperience(UserFacingExperience);
+}
+
+void ALyraPlayerController::ServerSubmitLocalLobbyLoadout_Implementation(FLyraLobbyPlayerLoadout Loadout)
+{
+	UE_LOG(LogLyra, Log, TEXT("Lobby loadout server RPC received. PC=%s PlayerState=%s Revision=%d Slots=%d"),
+		*GetNameSafe(this),
+		*GetNameSafe(PlayerState),
+		Loadout.Revision,
+		Loadout.AccessorySlots.Num());
+
+	ApplyLobbyLoadoutOnServer(Loadout);
+}
+
+bool ALyraPlayerController::ApplyLobbyLoadoutOnServer(const FLyraLobbyPlayerLoadout& Loadout)
+{
+	if (!HasAuthority())
+	{
+		UE_LOG(LogLyra, Warning, TEXT("Lobby loadout apply rejected because PC is not authority. PC=%s"), *GetNameSafe(this));
+		return false;
+	}
+
+	if (ALyraPlayerState* LyraPlayerState = GetLyraPlayerState())
+	{
+		if (ULyraLobbyPlayerStateComponent* LobbyPlayerState = LyraPlayerState->GetLobbyPlayerStateComponent())
+		{
+			LobbyPlayerState->SubmitLobbyLoadout(Loadout);
+			LyraPlayerState->ForceNetUpdate();
+
+			if (APawn* ControlledPawn = GetPawn())
+			{
+				ControlledPawn->FlushNetDormancy();
+				ControlledPawn->ForceNetUpdate();
+			}
+
+			UE_LOG(LogLyra, Log, TEXT("Lobby loadout applied on server. PC=%s PlayerState=%s Pawn=%s NewRevision=%d Slots=%d"),
+				*GetNameSafe(this),
+				*GetNameSafe(LyraPlayerState),
+				*GetNameSafe(GetPawn()),
+				LobbyPlayerState->GetLobbyLoadout().Revision,
+				LobbyPlayerState->GetLobbyLoadout().AccessorySlots.Num());
+			return true;
+		}
+
+		UE_LOG(LogLyra, Warning, TEXT("Lobby loadout apply failed: PlayerState has no LobbyPlayerStateComponent. PC=%s PlayerState=%s"),
+			*GetNameSafe(this),
+			*GetNameSafe(LyraPlayerState));
+	}
+	else
+	{
+		UE_LOG(LogLyra, Warning, TEXT("Lobby loadout apply failed: PC has no LyraPlayerState. PC=%s PlayerState=%s"),
+			*GetNameSafe(this),
+			*GetNameSafe(PlayerState));
+	}
+
+	return false;
 }
 
 void ALyraPlayerController::MarkLobbyReadyAndMaybeTravelToExperience(const ULyraUserFacingExperienceDefinition* UserFacingExperience)
@@ -499,13 +572,7 @@ void ALyraPlayerController::PushLocalLobbyLoadoutToServer()
 		return;
 	}
 
-	if (ALyraPlayerState* LyraPlayerState = GetLyraPlayerState())
-	{
-		if (ULyraLobbyPlayerStateComponent* LobbyPlayerState = LyraPlayerState->GetLobbyPlayerStateComponent())
-		{
-			LobbyPlayerState->SubmitLobbyLoadout(SavedLoadout);
-		}
-	}
+	SubmitLocalLobbyLoadout(SavedLoadout);
 }
 
 void ALyraPlayerController::InitPlayerState()

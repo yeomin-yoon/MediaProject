@@ -137,6 +137,9 @@ protected:
     FActionCombatEquippedAccessoryList EquippedAccessories;
 
 private:
+    UFUNCTION()
+    void OnRep_AccessoryVisualSync();
+
     UFUNCTION(Server, Reliable)
     void ServerRequestEquipAccessory(FSoftObjectPath AccessoryDataPath);
 
@@ -149,6 +152,7 @@ private:
     bool HandleEquipRequest(const FSoftObjectPath& AccessoryDataPath);
     bool HandleUnequipRequest(const FGameplayTag& SlotTag);
     void HandleClearRequest();
+    void MarkAccessoryVisualStateDirty();
 
     UActionCombatAccessoryData* LoadAccessoryData(const FSoftObjectPath& AccessoryDataPath) const;
     UActionCombatAppearanceComponent* ResolveAppearanceComponent() const;
@@ -159,6 +163,12 @@ private:
     void CreateVisualForEntry(const FActionCombatEquippedAccessoryEntry& Entry);
     void ApplyMaterialOverrides(UPrimitiveComponent* PrimitiveComponent, const TArray<TSoftObjectPtr<UMaterialInterface>>& MaterialOverrides) const;
     bool HasAuthorityForAccessories() const;
+
+    UPROPERTY(ReplicatedUsing = OnRep_AccessoryVisualSync)
+    int32 AccessoryVisualSyncRevision = 0;
+
+    UPROPERTY(ReplicatedUsing = OnRep_AccessoryVisualSync)
+    int32 AuthoritativeAccessoryEntryCount = 0;
 
     UPROPERTY(Transient)
     TMap<FGameplayTag, TObjectPtr<USceneComponent>> SpawnedAccessoryVisuals;

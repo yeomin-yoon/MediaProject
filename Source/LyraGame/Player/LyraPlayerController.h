@@ -4,6 +4,7 @@
 
 #include "Camera/LyraCameraAssistInterface.h"
 #include "CommonPlayerController.h"
+#include "Lobby/LyraLobbyTypes.h"
 #include "Teams/LyraTeamAgentInterface.h"
 
 #include "LyraPlayerController.generated.h"
@@ -57,6 +58,9 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Lyra|Lobby")
 	void RequestConnectedLobbyReadyToTravelToExperience(const ULyraUserFacingExperienceDefinition* UserFacingExperience);
 
+	UFUNCTION(BlueprintCallable, Category = "Lyra|Lobby")
+	bool SubmitLocalLobbyLoadout(const FLyraLobbyPlayerLoadout& Loadout);
+
 	// Call to see if we should record a replay, subclasses could change this
 	virtual bool ShouldRecordClientReplay();
 
@@ -73,6 +77,9 @@ public:
 
 	UFUNCTION(Reliable, Server)
 	void ServerRequestConnectedLobbyReadyToTravelToExperience(FPrimaryAssetId UserFacingExperienceId);
+
+	UFUNCTION(Reliable, Server)
+	void ServerSubmitLocalLobbyLoadout(FLyraLobbyPlayerLoadout Loadout);
 
 	//~AActor interface
 	virtual void PreInitializeComponents() override;
@@ -134,6 +141,7 @@ protected:
 private:
 	void BroadcastOnPlayerStateChanged();
 	void PushLocalLobbyLoadoutToServer();
+	bool ApplyLobbyLoadoutOnServer(const FLyraLobbyPlayerLoadout& Loadout);
 	void MarkLobbyReadyAndMaybeTravelToExperience(const ULyraUserFacingExperienceDefinition* UserFacingExperience);
 public:
 	void SaveInventoryBeforeTravel();

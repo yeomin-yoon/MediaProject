@@ -63,6 +63,11 @@ bool ULyraLobbyLoadoutFunctionLibrary::SubmitLocalLobbyLoadout(const UObject* Wo
 {
 	SaveLocalLobbyLoadoutForTravel(WorldContextObject, Loadout, LocalPlayerIndex);
 
+	if (ALyraPlayerController* LyraPlayerController = Cast<ALyraPlayerController>(UGameplayStatics::GetPlayerController(WorldContextObject, LocalPlayerIndex)))
+	{
+		return LyraPlayerController->SubmitLocalLobbyLoadout(Loadout);
+	}
+
 	if (ULyraLobbyPlayerStateComponent* LobbyPlayer = GetLocalLobbyPlayerStateComponent(WorldContextObject, LocalPlayerIndex))
 	{
 		LobbyPlayer->SubmitLobbyLoadout(Loadout);
@@ -98,6 +103,11 @@ bool ULyraLobbyLoadoutFunctionLibrary::PushSavedLocalLobbyLoadoutToServer(const 
 	if (!LocalLoadoutSubsystem->GetLocalLoadout(LocalPlayerIndex, SavedLoadout))
 	{
 		return false;
+	}
+
+	if (ALyraPlayerController* LyraPlayerController = Cast<ALyraPlayerController>(UGameplayStatics::GetPlayerController(WorldContextObject, LocalPlayerIndex)))
+	{
+		return LyraPlayerController->SubmitLocalLobbyLoadout(SavedLoadout);
 	}
 
 	if (ULyraLobbyPlayerStateComponent* LobbyPlayer = GetLocalLobbyPlayerStateComponent(WorldContextObject, LocalPlayerIndex))

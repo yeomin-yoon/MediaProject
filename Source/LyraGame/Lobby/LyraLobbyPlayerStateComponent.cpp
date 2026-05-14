@@ -2,6 +2,8 @@
 
 #include "Lobby/LyraLobbyPlayerStateComponent.h"
 
+#include "GameFramework/Actor.h"
+#include "LyraLogChannels.h"
 #include "Net/UnrealNetwork.h"
 
 #include UE_INLINE_GENERATED_CPP_BY_NAME(LyraLobbyPlayerStateComponent)
@@ -100,6 +102,10 @@ void ULyraLobbyPlayerStateComponent::ApplySubmittedLoadout(const FLyraLobbyPlaye
 {
 	if (ReadyState == ELyraLobbyReadyState::Locked)
 	{
+		UE_LOG(LogLyra, Warning, TEXT("Lobby loadout rejected because loadout is locked. Owner=%s IncomingRevision=%d Slots=%d"),
+			*GetNameSafe(GetOwner()),
+			NewLoadout.Revision,
+			NewLoadout.AccessorySlots.Num());
 		return;
 	}
 
@@ -107,6 +113,16 @@ void ULyraLobbyPlayerStateComponent::ApplySubmittedLoadout(const FLyraLobbyPlaye
 	LobbyLoadout = NewLoadout;
 	LobbyLoadout.Revision = NextRevision;
 	OnRep_LobbyLoadout();
+
+	if (AActor* Owner = GetOwner())
+	{
+		Owner->ForceNetUpdate();
+	}
+
+	UE_LOG(LogLyra, Log, TEXT("Lobby loadout applied. Owner=%s Revision=%d Slots=%d"),
+		*GetNameSafe(GetOwner()),
+		LobbyLoadout.Revision,
+		LobbyLoadout.AccessorySlots.Num());
 
 	if (ReadyState == ELyraLobbyReadyState::Ready)
 	{

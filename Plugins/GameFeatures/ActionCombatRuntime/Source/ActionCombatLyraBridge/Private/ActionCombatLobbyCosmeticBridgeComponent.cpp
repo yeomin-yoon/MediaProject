@@ -75,7 +75,8 @@ bool UActionCombatLobbyCosmeticBridgeComponent::ApplyLobbyCosmeticsNow()
     }
 
     const FLyraLobbyPlayerLoadout& Loadout = LobbyPlayer->GetLobbyLoadout();
-    if (LastAppliedRevision == Loadout.Revision)
+    const bool bForceInitialReapply = SuccessfulInitialReapplyAttempts < InitialForcedReapplyAttempts;
+    if (LastAppliedRevision == Loadout.Revision && !bForceInitialReapply)
     {
         return true;
     }
@@ -84,6 +85,12 @@ bool UActionCombatLobbyCosmeticBridgeComponent::ApplyLobbyCosmeticsNow()
     if (bApplied)
     {
         LastAppliedRevision = Loadout.Revision;
+        ++SuccessfulInitialReapplyAttempts;
+
+        if (bForceInitialReapply)
+        {
+            ScheduleRetryIfNeeded();
+        }
     }
 
     return bApplied;
@@ -143,12 +150,7 @@ bool UActionCombatLobbyCosmeticBridgeComponent::ApplyLoadout(const FLyraLobbyPla
         return false;
     }
 
-    if (bClearExistingAccessoriesBeforeApply)
-    {
-        AccessoryComponent->RequestClearAllAccessories();
-    }
-
-    int32 AppliedCount = 0;
+    TMap<FGameplayTag, UActionCombatAccessoryData*> DesiredAccessories;
     for (const FLyraLobbyAccessorySelection& Selection : Loadout.AccessorySlots)
     {
         if (!Selection.SlotTag.IsValid())
@@ -165,7 +167,41 @@ bool UActionCombatLobbyCosmeticBridgeComponent::ApplyLoadout(const FLyraLobbyPla
             continue;
         }
 
-        if (AccessoryComponent->RequestEquipAccessory(AccessoryData))
+        DesiredAccessories.Add(Selection.SlotTag, AccessoryData);
+    }
+
+    if (bClearExistingAccessoriesBeforeApply)
+    {
+        if (DesiredAccessories.IsEmpty())
+        {
+            AccessoryComponent->RequestClearAllAccessories();
+        }
+        else
+        {
+            const TArray<FActionCombatEquippedAccessoryView> CurrentAccessories = AccessoryComponent->GetEquippedAccessories();
+            for (const FActionCombatEquippedAccessoryView& CurrentAccessory : CurrentAccessories)
+            {
+                UActionCombatAccessoryData* const* DesiredAccessory = DesiredAccessories.Find(CurrentAccessory.SlotTag);
+                if (!DesiredAccessory || !*DesiredAccessory)
+                {
+                    AccessoryComponent->RequestUnequipSlot(CurrentAccessory.SlotTag);
+                    continue;
+                }
+
+                const FSoftObjectPath CurrentPath = CurrentAccessory.AccessoryData.ToSoftObjectPath();
+                const FSoftObjectPath DesiredPath(*DesiredAccessory);
+                if (CurrentPath != DesiredPath)
+                {
+                    AccessoryComponent->RequestUnequipSlot(CurrentAccessory.SlotTag);
+                }
+            }
+        }
+    }
+
+    int32 AppliedCount = 0;
+    for (const TPair<FGameplayTag, UActionCombatAccessoryData*>& DesiredAccessory : DesiredAccessories)
+    {
+        if (AccessoryComponent->RequestEquipAccessory(DesiredAccessory.Value))
         {
             ++AppliedCount;
         }
@@ -175,6 +211,11 @@ bool UActionCombatLobbyCosmeticBridgeComponent::ApplyLoadout(const FLyraLobbyPla
         Loadout.Revision,
         Loadout.AccessorySlots.Num(),
         AppliedCount));
+
+    if (AActor* Owner = GetOwner())
+    {
+        Owner->ForceNetUpdate();
+    }
 
     return true;
 }

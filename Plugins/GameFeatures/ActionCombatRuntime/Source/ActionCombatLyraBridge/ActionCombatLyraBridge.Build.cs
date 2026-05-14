@@ -24,7 +24,10 @@ public class ActionCombatLyraBridge : ModuleRules
             new string[]
             {
                 "EnhancedInput",
-                "LockOnSystemRuntime"
+                "LockOnSystemRuntime",
+                "Slate",
+                "SlateCore",
+                "UMG"
             });
     }
 }
