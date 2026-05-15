@@ -78,6 +78,39 @@ EDataValidationResult UActionCombatStyleData::IsDataValid(FDataValidationContext
             Result = EDataValidationResult::Invalid;
         }
 
+        if ((Action.AttackAdvance.StartNormalizedTime < 0.0f) || (Action.AttackAdvance.StartNormalizedTime > 1.0f))
+        {
+            Context.AddError(FText::FromString(FString::Printf(TEXT("Action %s must have AttackAdvance.StartNormalizedTime in the range [0, 1]."), *Action.ActionTag.ToString())));
+            Result = EDataValidationResult::Invalid;
+        }
+
+        if ((Action.AttackAdvance.EndNormalizedTime < 0.0f) || (Action.AttackAdvance.EndNormalizedTime > 1.0f))
+        {
+            Context.AddError(FText::FromString(FString::Printf(TEXT("Action %s must have AttackAdvance.EndNormalizedTime in the range [0, 1]."), *Action.ActionTag.ToString())));
+            Result = EDataValidationResult::Invalid;
+        }
+
+        if (Action.AttackAdvance.CurveExponent < 0.1f)
+        {
+            Context.AddError(FText::FromString(FString::Printf(TEXT("Action %s must have AttackAdvance.CurveExponent >= 0.1."), *Action.ActionTag.ToString())));
+            Result = EDataValidationResult::Invalid;
+        }
+
+        if (Action.AttackAdvance.bEnabled)
+        {
+            if (Action.AttackAdvance.Distance <= 0.0f)
+            {
+                Context.AddError(FText::FromString(FString::Printf(TEXT("Action %s has AttackAdvance enabled but Distance must be greater than zero."), *Action.ActionTag.ToString())));
+                Result = EDataValidationResult::Invalid;
+            }
+
+            if (Action.AttackAdvance.StartNormalizedTime >= Action.AttackAdvance.EndNormalizedTime)
+            {
+                Context.AddError(FText::FromString(FString::Printf(TEXT("Action %s must have AttackAdvance.StartNormalizedTime before AttackAdvance.EndNormalizedTime."), *Action.ActionTag.ToString())));
+                Result = EDataValidationResult::Invalid;
+            }
+        }
+
         if (Action.QueueWindowStartsAtNormalizedTime > Action.QueueWindowClosesAtNormalizedTime)
         {
             Context.AddError(FText::FromString(FString::Printf(TEXT("Action %s has QueueWindowStartsAtNormalizedTime after QueueWindowClosesAtNormalizedTime."), *Action.ActionTag.ToString())));

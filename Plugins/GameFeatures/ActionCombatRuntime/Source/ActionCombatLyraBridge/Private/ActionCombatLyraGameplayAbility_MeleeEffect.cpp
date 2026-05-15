@@ -31,6 +31,37 @@ UActionCombatLyraGameplayAbility_MeleeEffect::UActionCombatLyraGameplayAbility_M
     SnapshotDamageEffectClass = UActionCombatGameplayEffect_WeaponDamage::StaticClass();
     DamageMultiplierSetByCallerTag = ActionCombatLyraBridgeTags::SetByCaller_DamageMultiplier;
     TargetDodgeIFrameTag = ActionCombatLyraBridgeTags::Combat_State_Dodge_IFrame;
+    ActionEndedEventTag = FGameplayTag::RequestGameplayTag(TEXT("Combat.GameplayEvent.Action.Ended"), false);
+    EnsureDefaultGameplayEventTriggers();
+}
+
+void UActionCombatLyraGameplayAbility_MeleeEffect::PostLoad()
+{
+    Super::PostLoad();
+    EnsureDefaultGameplayEventTriggers();
+}
+
+void UActionCombatLyraGameplayAbility_MeleeEffect::EnsureDefaultGameplayEventTriggers()
+{
+    const FGameplayTag ActionStartedEventTag = FGameplayTag::RequestGameplayTag(TEXT("Combat.GameplayEvent.Action.Started"), false);
+    if (!ActionStartedEventTag.IsValid())
+    {
+        return;
+    }
+
+    for (const FAbilityTriggerData& TriggerData : AbilityTriggers)
+    {
+        if ((TriggerData.TriggerSource == EGameplayAbilityTriggerSource::GameplayEvent)
+            && TriggerData.TriggerTag.MatchesTagExact(ActionStartedEventTag))
+        {
+            return;
+        }
+    }
+
+    FAbilityTriggerData TriggerData;
+    TriggerData.TriggerSource = EGameplayAbilityTriggerSource::GameplayEvent;
+    TriggerData.TriggerTag = ActionStartedEventTag;
+    AbilityTriggers.Add(TriggerData);
 }
 
 void UActionCombatLyraGameplayAbility_MeleeEffect::ActivateAbility(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo, const FGameplayAbilityActivationInfo ActivationInfo, const FGameplayEventData* TriggerEventData)
@@ -455,26 +486,14 @@ void UActionCombatLyraGameplayAbility_MeleeEffect::TryApplyReactionToRecordedHit
         return;
     }
 
-    UActionCombatReactionComponent* ReactionComponent = UActionCombatReactionComponent::FindOrCreateReactionComponent(HitActor);
-    if (ReactionComponent == nullptr)
-    {
-        return;
-    }
-
-    FVector ImpulseDirection = (HitActor->GetActorLocation() - AvatarActor->GetActorLocation()).GetSafeNormal2D();
-    if (ImpulseDirection.IsNearlyZero())
-    {
-        ImpulseDirection = AvatarActor->GetActorForwardVector().GetSafeNormal2D();
-    }
-
-    FActionCombatReactionHit ReactionHit;
-    ReactionHit.PoiseDamage = ResolvedPoiseDamage;
-    ReactionHit.KnockdownPower = ResolvedPoiseDamage;
-    ReactionHit.WorldSpaceImpulseDirection = ImpulseDirection;
-    ReactionHit.InstigatorActor = const_cast<AActor*>(AvatarActor);
-
     FActionCombatReactionResult ReactionResult;
-    if (ReactionComponent->TryApplyReactionHit(ReactionHit, ReactionResult))
+    if (UActionCombatReactionComponent::ApplyReactionHitToActor(
+        HitActor,
+        const_cast<AActor*>(AvatarActor),
+        ResolvedPoiseDamage,
+        ResolvedPoiseDamage,
+        FVector::ZeroVector,
+        ReactionResult))
     {
         UE_LOG(
             LogActionCombatRuntime,

@@ -9,6 +9,7 @@
 #include "ActionCombatComponent.generated.h"
 
 class AActor;
+class UAnimInstance;
 class UAnimMontage;
 class UAbilitySystemComponent;
 class USkeletalMeshComponent;
@@ -72,6 +73,15 @@ struct ACTIONCOMBATRUNTIME_API FActionCombatActiveActionState
     UPROPERTY(BlueprintReadOnly, Category = "Damage")
     float BuildupMultiplier = 1.0f;
 
+    UPROPERTY(BlueprintReadOnly, Category = "Action")
+    float AttackAdvanceAppliedDistance = 0.0f;
+
+    UPROPERTY(BlueprintReadOnly, Category = "Action")
+    FVector AttackAdvanceDirection = FVector::ZeroVector;
+
+    UPROPERTY(BlueprintReadOnly, Category = "Action")
+    bool bAttackAdvanceBlocked = false;
+
     void Reset()
     {
         ActionTag = FGameplayTag();
@@ -85,6 +95,9 @@ struct ACTIONCOMBATRUNTIME_API FActionCombatActiveActionState
         MotionValue = 1.0f;
         PoiseDamage = 0.0f;
         BuildupMultiplier = 1.0f;
+        AttackAdvanceAppliedDistance = 0.0f;
+        AttackAdvanceDirection = FVector::ZeroVector;
+        bAttackAdvanceBlocked = false;
     }
 };
 
@@ -116,6 +129,15 @@ struct ACTIONCOMBATRUNTIME_API FActionCombatReplicatedState
 
     UPROPERTY()
     float MontageServerStartTimeSeconds = 0.0f;
+
+    UPROPERTY()
+    float AttackAdvanceAppliedDistance = 0.0f;
+
+    UPROPERTY()
+    FVector AttackAdvanceDirection = FVector::ZeroVector;
+
+    UPROPERTY()
+    bool bAttackAdvanceBlocked = false;
 };
 
 USTRUCT(BlueprintType)
@@ -235,6 +257,9 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Action Combat|Runtime")
     void InterruptActiveAction();
 
+    UFUNCTION(BlueprintPure, Category = "Action Combat|Runtime")
+    USkeletalMeshComponent* GetAnimationMeshComponent() const;
+
     void BroadcastReactionCueForActor(AActor* ReactionActor, EActionCombatReactionState NewState, FVector_NetQuantizeNormal WorldSpaceImpulseDirection, FVector_NetQuantize WorldSpaceActorLocation, int32 CueId);
 
     UFUNCTION(BlueprintCallable, Category = "Action Combat|Debug")
@@ -295,10 +320,35 @@ private:
 
     bool HasRuntimeAuthority() const;
     bool HandleCommandRequestInternal(const FActionCombatBufferedCommandState& CommandRequest);
-    bool ResolveTransitionAndStart(const FGameplayTag& FromActionTag, const FActionCombatBufferedCommandState& CommandRequest);
+    bool ResolveTransitionAndStart(FGameplayTag FromActionTag, const FActionCombatBufferedCommandState& CommandRequest);
     bool StartActionFromDefinition(const FActionCombatActionDefinition* ActionDefinition, const UActionCombatStyleData* SourceStyle);
     void EndActiveAction(bool bWasInterrupted);
+    void InitializeAttackAdvanceForAction();
     void UpdateActiveActionProgress(float DeltaTime);
+    void InitializeManualMontageRootMotion(UAnimMontage* PlayableMontage, UAnimInstance* AnimInstance);
+    void TickManualMontageRootMotion();
+    void ResetManualMontageRootMotion();
+    bool ShouldManuallyDriveMontageRootMotion(const UAnimMontage* PlayableMontage) const;
+    static bool DoesMontageHaveMeaningfulRootMotion(const UAnimMontage* PlayableMontage);
+    void ConfigureAnimationTickPrerequisite();
+    void ApplyActiveActionAnimationOverrides();
+    void ResetActionAnimationOverrides();
+    static void ApplyFootPlacementOverride(UAnimInstance* AnimInstance, bool bDisableFootPlacement);
+    static bool SetAnimBoolProperty(UAnimInstance* AnimInstance, FName PropertyName, bool bValue);
+    static bool SetAnimFloatProperty(UAnimInstance* AnimInstance, FName PropertyName, float Value);
+    void ApplyActiveActionRotationLock();
+    void MaintainActiveActionRotationLock();
+    void ResetActiveActionRotationLock();
+    void TickAttackAdvance(float DeltaTime);
+    void TickClientAttackAdvanceVisuals(float DeltaTime);
+    bool CanApplyAttackAdvance() const;
+    FVector ResolveAttackAdvanceDirection() const;
+    bool MoveOwnerForAttackAdvance(const FVector& Delta, FHitResult& OutHit);
+    float CalculateAttackAdvanceDesiredDistance() const;
+    void SetAttackAdvanceMeshCompensationDistance(float Distance);
+    void StartAttackAdvanceMeshCompensationRecovery();
+    void TickAttackAdvanceMeshCompensationRecovery(float DeltaTime);
+    void ResetAttackAdvanceMeshCompensation(bool bRestoreMeshLocation);
     void TryCommitPendingCommands();
     void RefreshActiveMontagePlayRate();
     void SyncReplicatedMontage();
@@ -306,6 +356,8 @@ private:
     void UpdateReplicatedStateFromLocal();
     float GetStylePlayRateSnapshot() const;
     bool IsCurrentActionFinished() const;
+    UAnimMontage* ResolvePlayableMontage(UAnimMontage* SourceMontage);
+    static bool ShouldUseFullBodyMontageOverride(const UAnimMontage* SourceMontage);
     const FActionCombatActionDefinition* FindActionDefinitionInLayers(const FGameplayTag& ActionTag, const UActionCombatStyleData*& OutSourceStyle) const;
     const FActionCombatTransitionDefinition* FindTransitionInLayers(const FGameplayTag& FromActionTag, const FActionCombatBufferedCommandState& CommandRequest) const;
     bool DoesOwnerMeetActionTagRequirements(const FActionCombatActionDefinition* ActionDefinition, FString& OutFailureReason) const;
@@ -324,6 +376,9 @@ private:
     float ActiveActionElapsedScaledTime = 0.0f;
     float ActiveActionStylePlayRateSnapshot = 1.0f;
     int32 ActionInstanceCounter = 0;
+    TWeakObjectPtr<UAnimMontage> ManualRootMotionMontage;
+    float ManualRootMotionPreviousPosition = 0.0f;
+    int32 ManualRootMotionActionInstanceId = 0;
     FActionCombatBufferedCommandState BufferedCommand;
     FActionCombatBufferedCommandState PendingInterruptCommand;
     FGameplayTagContainer HeldInputTags;
@@ -331,4 +386,22 @@ private:
     TWeakObjectPtr<UAnimMontage> LastReplicatedMontage;
     int32 LastReplicatedMontageActionInstanceId = 0;
     bool bFocusActive = false;
+    TWeakObjectPtr<class ACharacter> RotationLockCharacter;
+    FRotator LockedActionActorRotation = FRotator::ZeroRotator;
+    bool bRotationLockApplied = false;
+    bool bSavedUseControllerRotationPitch = false;
+    bool bSavedUseControllerRotationYaw = false;
+    bool bSavedUseControllerRotationRoll = false;
+    bool bSavedOrientRotationToMovement = false;
+    bool bSavedUseControllerDesiredRotation = false;
+    TWeakObjectPtr<USkeletalMeshComponent> AttackAdvanceCompensatedMesh;
+    FVector AttackAdvanceBaseMeshRelativeLocation = FVector::ZeroVector;
+    FVector AttackAdvanceMeshCompensationOffset = FVector::ZeroVector;
+    FVector AttackAdvanceMeshCompensationRecoveryStartOffset = FVector::ZeroVector;
+    float AttackAdvanceMeshCompensationRecoveryElapsed = 0.0f;
+    bool bAttackAdvanceMeshCompensationActive = false;
+    bool bAttackAdvanceMeshCompensationRecovering = false;
+
+    UPROPERTY(Transient)
+    TMap<TObjectPtr<UAnimMontage>, TObjectPtr<UAnimMontage>> RuntimeMontageOverrides;
 };

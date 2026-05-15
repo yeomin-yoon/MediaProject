@@ -364,6 +364,29 @@ bool UActionCombatReactionComponent::TryApplyReactionHit(const FActionCombatReac
     return OutResult.Outcome != EActionCombatReactionOutcome::None;
 }
 
+bool UActionCombatReactionComponent::ApplyReactionHit(AActor* InstigatorActor, float PoiseDamage, float KnockdownPower, FVector WorldSpaceImpulseDirection, FActionCombatReactionResult& OutResult)
+{
+    FActionCombatReactionHit ReactionHit;
+    ReactionHit.PoiseDamage = PoiseDamage;
+    ReactionHit.KnockdownPower = KnockdownPower;
+    ReactionHit.WorldSpaceImpulseDirection = ResolveImpulseDirection(InstigatorActor, WorldSpaceImpulseDirection);
+    ReactionHit.InstigatorActor = InstigatorActor;
+
+    return TryApplyReactionHit(ReactionHit, OutResult);
+}
+
+bool UActionCombatReactionComponent::ApplyReactionHitToActor(AActor* TargetActor, AActor* InstigatorActor, float PoiseDamage, float KnockdownPower, FVector WorldSpaceImpulseDirection, FActionCombatReactionResult& OutResult)
+{
+    OutResult = FActionCombatReactionResult();
+
+    if (UActionCombatReactionComponent* ReactionComponent = FindOrCreateReactionComponent(TargetActor))
+    {
+        return ReactionComponent->ApplyReactionHit(InstigatorActor, PoiseDamage, KnockdownPower, WorldSpaceImpulseDirection, OutResult);
+    }
+
+    return false;
+}
+
 bool UActionCombatReactionComponent::ForceKnockdown(AActor* InstigatorActor, FVector WorldSpaceImpulseDirection)
 {
     return ForceKnockdownInternal(InstigatorActor, WorldSpaceImpulseDirection, nullptr);
@@ -932,8 +955,9 @@ void UActionCombatReactionComponent::PlayReactionAnimation(EActionCombatReaction
         return;
     }
 
-    UAnimMontage* Montage = ReactionAnimation->Montage.LoadSynchronous();
-    UAnimSequenceBase* Sequence = Montage ? nullptr : ReactionAnimation->Sequence.LoadSynchronous();
+    UAnimMontage* SourceMontage = ReactionAnimation->Montage.LoadSynchronous();
+    UAnimMontage* PlayableMontage = SourceMontage ? ResolvePlayableReactionMontage(SourceMontage) : nullptr;
+    UAnimSequenceBase* Sequence = SourceMontage ? nullptr : ReactionAnimation->Sequence.LoadSynchronous();
 
     USkeletalMeshComponent* MeshComponent = ResolveAnimationMesh(ReactionAnimation);
     UAnimInstance* AnimInstance = MeshComponent ? MeshComponent->GetAnimInstance() : nullptr;
@@ -960,11 +984,11 @@ void UActionCombatReactionComponent::PlayReactionAnimation(EActionCombatReaction
         ClearKnockdownPoseHold(false);
     }
 
-    if (Montage)
+    if (PlayableMontage)
     {
-        if (AnimInstance->Montage_Play(Montage, FMath::Max(ReactionAnimation->PlayRate, 0.01f)) > 0.0f)
+        if (AnimInstance->Montage_Play(PlayableMontage, FMath::Max(ReactionAnimation->PlayRate, 0.01f)) > 0.0f)
         {
-            ActiveReactionMontage = Montage;
+            ActiveReactionMontage = PlayableMontage;
             ActiveReactionAnimInstance = AnimInstance;
             if (ReactionState == EActionCombatReactionState::Knockdown)
             {
@@ -983,11 +1007,13 @@ void UActionCombatReactionComponent::PlayReactionAnimation(EActionCombatReaction
             }
             UE_LOG(
                 LogActionCombatRuntime,
-                Verbose,
-                TEXT("[Reaction:%s] Playing reaction montage %s on %s State=%d"),
+                Log,
+                TEXT("[Reaction:%s] Playing reaction montage Source=%s Playable=%s on %s Slot=%s State=%d"),
                 *GetPathNameSafe(GetOwner()),
-                *GetPathNameSafe(Montage),
+                *GetPathNameSafe(SourceMontage),
+                *GetPathNameSafe(PlayableMontage),
                 *GetPathNameSafe(MeshComponent),
+                *ReactionSlotName.ToString(),
                 static_cast<int32>(ReactionState));
         }
         else
@@ -997,7 +1023,7 @@ void UActionCombatReactionComponent::PlayReactionAnimation(EActionCombatReaction
                 Warning,
                 TEXT("[Reaction:%s] Montage_Play failed for %s on %s State=%d"),
                 *GetPathNameSafe(GetOwner()),
-                *GetPathNameSafe(Montage),
+                *GetPathNameSafe(PlayableMontage),
                 *GetPathNameSafe(MeshComponent),
                 static_cast<int32>(ReactionState));
         }
@@ -1033,11 +1059,12 @@ void UActionCombatReactionComponent::PlayReactionAnimation(EActionCombatReaction
             }
             UE_LOG(
                 LogActionCombatRuntime,
-                Verbose,
-                TEXT("[Reaction:%s] Playing reaction sequence %s as dynamic montage on %s State=%d"),
+                Log,
+                TEXT("[Reaction:%s] Playing reaction sequence %s as dynamic montage on %s Slot=%s State=%d"),
                 *GetPathNameSafe(GetOwner()),
                 *GetPathNameSafe(Sequence),
                 *GetPathNameSafe(MeshComponent),
+                *ReactionSlotName.ToString(),
                 static_cast<int32>(ReactionState));
         }
         else
@@ -1177,6 +1204,37 @@ EActionCombatReactionDirection UActionCombatReactionComponent::ResolveReactionDi
     return LocalDirection.Y < 0.0f ? EActionCombatReactionDirection::Right : EActionCombatReactionDirection::Left;
 }
 
+bool UActionCombatReactionComponent::ShouldUseReactionSlotOverride(const UAnimMontage* SourceMontage) const
+{
+    return SourceMontage
+        && !ReactionSlotName.IsNone()
+        && SourceMontage->SlotAnimTracks.Num() == 1
+        && SourceMontage->SlotAnimTracks[0].SlotName != ReactionSlotName;
+}
+
+UAnimMontage* UActionCombatReactionComponent::ResolvePlayableReactionMontage(UAnimMontage* SourceMontage)
+{
+    if (!ShouldUseReactionSlotOverride(SourceMontage))
+    {
+        return SourceMontage;
+    }
+
+    if (TObjectPtr<UAnimMontage>* ExistingOverride = RuntimeReactionMontageOverrides.Find(SourceMontage))
+    {
+        return ExistingOverride->Get();
+    }
+
+    UAnimMontage* OverrideMontage = DuplicateObject<UAnimMontage>(SourceMontage, this);
+    if (!OverrideMontage)
+    {
+        return SourceMontage;
+    }
+
+    OverrideMontage->SlotAnimTracks[0].SlotName = ReactionSlotName;
+    RuntimeReactionMontageOverrides.Add(SourceMontage, OverrideMontage);
+    return OverrideMontage;
+}
+
 bool UActionCombatReactionComponent::IsAnimationCompatibleWithMesh(const USkeletalMeshComponent* MeshComponent, const FActionCombatReactionAnimation* ReactionAnimation) const
 {
     const USkeletalMesh* SkeletalMesh = MeshComponent ? MeshComponent->GetSkeletalMeshAsset() : nullptr;
@@ -1228,6 +1286,25 @@ USkeletalMeshComponent* UActionCombatReactionComponent::ResolveAnimationMesh(con
     if (Owner == nullptr)
     {
         return nullptr;
+    }
+
+    if (USkeletalMeshComponent* ExplicitMesh = Cast<USkeletalMeshComponent>(AnimationMeshComponent.GetComponent(Owner)))
+    {
+        if (ExplicitMesh->GetAnimInstance() && IsAnimationCompatibleWithMesh(ExplicitMesh, ReactionAnimation))
+        {
+            return ExplicitMesh;
+        }
+    }
+
+    if (const UActionCombatComponent* CombatComponent = Owner->FindComponentByClass<UActionCombatComponent>())
+    {
+        if (USkeletalMeshComponent* CombatMesh = CombatComponent->GetAnimationMeshComponent())
+        {
+            if (CombatMesh->GetAnimInstance() && IsAnimationCompatibleWithMesh(CombatMesh, ReactionAnimation))
+            {
+                return CombatMesh;
+            }
+        }
     }
 
     TArray<USkeletalMeshComponent*> SkeletalMeshes;

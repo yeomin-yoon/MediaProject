@@ -35,6 +35,36 @@ struct ACTIONCOMBATRUNTIME_API FActionCombatAttributeCost
 };
 
 USTRUCT(BlueprintType)
+struct ACTIONCOMBATRUNTIME_API FActionCombatAttackAdvanceSettings
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Attack Advance")
+    bool bEnabled = false;
+
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Attack Advance", meta = (ClampMin = "0.0", Units = "cm"))
+    float Distance = 0.0f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Attack Advance", meta = (ClampMin = "0.0", ClampMax = "1.0"))
+    float StartNormalizedTime = 0.12f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Attack Advance", meta = (ClampMin = "0.0", ClampMax = "1.0"))
+    float EndNormalizedTime = 0.45f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Attack Advance", meta = (ClampMin = "0.1", AdvancedDisplay))
+    float CurveExponent = 1.0f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Attack Advance", meta = (AdvancedDisplay))
+    bool bRequireGrounded = true;
+
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Attack Advance", meta = (AdvancedDisplay))
+    bool bStopOnBlockingHit = true;
+
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Attack Advance", meta = (AdvancedDisplay))
+    bool bCompensateMeshOffset = true;
+};
+
+USTRUCT(BlueprintType)
 struct ACTIONCOMBATRUNTIME_API FActionCombatActionDefinition
 {
     GENERATED_BODY()
@@ -59,6 +89,9 @@ struct ACTIONCOMBATRUNTIME_API FActionCombatActionDefinition
 
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Action", meta = (ClampMin = "0.0", ClampMax = "1.0"))
     float ChainCommitAtNormalizedTime = 1.0f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Action|Advance")
+    FActionCombatAttackAdvanceSettings AttackAdvance;
 
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Action")
     bool bAllowDodgeCancel = false;
