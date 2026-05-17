@@ -1,12 +1,18 @@
-﻿#pragma once
+﻿// Fill out your copyright notice in the Description page of Project Settings.
+
+#pragma once
 
 #include "CoreMinimal.h"
 #include "Subsystems/GameInstanceSubsystem.h"
-#include "InventoryFragment_EquipEffect.h"
 #include "InventorySaveSubsystem.generated.h"
 
-class ULyraInventoryItemDefinition;
+/**
+ * 
+ */
+#pragma once
 
+
+class ULyraInventoryItemDefinition;
 // ============================
 // 개별 아이템 저장 데이터
 // ============================
@@ -23,13 +29,9 @@ struct FInventoryEntrySave
 
 	UPROPERTY()
 	int32 EquipSlotIndex = INDEX_NONE;
-
+	
 	UPROPERTY()
 	int32 RandomSeed = 0;
-
-	// 추가
-	UPROPERTY()
-	EItemOptionType OptionType = EItemOptionType::Attack;
 };
 
 // ============================
@@ -45,23 +47,15 @@ struct FInventorySaveData
 };
 
 UCLASS()
-class LYRAGAME_API UInventorySaveSubsystem
-	: public UGameInstanceSubsystem
+class LYRAGAME_API UInventorySaveSubsystem : public UGameInstanceSubsystem
 {
 	GENERATED_BODY()
-
+	
 public:
-
-	void SetInventory(
-		const FString& PlayerId,
-		const FInventorySaveData& Data);
-
-	bool GetInventory(
-		const FString& PlayerId,
-		FInventorySaveData& OutData) const;
+	void SetInventory(const FString& PlayerId, const FInventorySaveData& Data);
+	bool GetInventory(const FString& PlayerId, FInventorySaveData& OutData) const;
 
 private:
-
 	UPROPERTY()
 	TMap<FString, FInventorySaveData> SavedInventories;
 };

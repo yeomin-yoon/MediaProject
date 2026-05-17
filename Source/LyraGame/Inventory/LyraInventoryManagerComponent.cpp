@@ -98,42 +98,13 @@ ULyraInventoryItemInstance* FLyraInventoryList::AddEntry(
 	NewEntry.Instance->SetItemDef(ItemDef);
 
 	// ======================================
-	// 랜덤 데이터 생성
+	// 🔥 랜덤 생성 (딱 1번)
 	// ======================================
-
-	// Seed 생성
 	if (NewEntry.Instance->RandomSeed == 0)
 	{
 		NewEntry.Instance->RandomSeed = FMath::Rand();
 	}
-
-	// RandomStream
-	FRandomStream Stream(NewEntry.Instance->RandomSeed);
-
-	// 옵션 타입 결정
-	int32 RandomOption = Stream.RandRange(0, 2);
-
-	switch (RandomOption)
-	{
-	case 0:
-		NewEntry.Instance->OptionType =
-			EItemOptionType::Attack;
-		break;
-
-	case 1:
-		NewEntry.Instance->OptionType =
-			EItemOptionType::Health;
-		break;
-
-	case 2:
-		NewEntry.Instance->OptionType =
-			EItemOptionType::Stamina;
-		break;
-	}
-
-	// 값 랜덤용
-	NewEntry.Instance->RandomValue =
-		Stream.FRand();
+	NewEntry.Instance->RandomValue = FMath::FRand();
 
 	NewEntry.StackCount = StackCount;
 
@@ -572,26 +543,19 @@ void ULyraInventoryManagerComponent::ApplyEquipEffect(
 	if (!Item)
 		return;
 
-	APlayerController* PC =
-		Cast<APlayerController>(GetOwner());
-
-	APlayerState* PS =
-		PC ? PC->GetPlayerState<APlayerState>() : nullptr;
-
-	UAbilitySystemComponent* ASC =
-		PS ? PS->FindComponentByClass<UAbilitySystemComponent>() : nullptr;
+	APlayerController* PC = Cast<APlayerController>(GetOwner());
+	APlayerState* PS = PC ? PC->GetPlayerState<APlayerState>() : nullptr;
+	UAbilitySystemComponent* ASC = PS ? PS->FindComponentByClass<UAbilitySystemComponent>() : nullptr;
 
 	if (!ASC)
 		return;
 
 	const ULyraInventoryItemDefinition* DefCDO =
-		GetDefault<ULyraInventoryItemDefinition>(
-			Item->GetItemDef());
+		GetDefault<ULyraInventoryItemDefinition>(Item->GetItemDef());
 
 	const UInventoryFragment_EquipEffect* Frag =
 		Cast<UInventoryFragment_EquipEffect>(
-			DefCDO->FindFragmentByClass(
-				UInventoryFragment_EquipEffect::StaticClass())
+			DefCDO->FindFragmentByClass(UInventoryFragment_EquipEffect::StaticClass())
 		);
 
 	if (!Frag)
@@ -600,65 +564,21 @@ void ULyraInventoryManagerComponent::ApplyEquipEffect(
 	// 기존 제거
 	RemoveEquipEffect(ASC, Item);
 
-	float AttackValue = 0.f;
-	float HealthValue = 0.f;
-	float StaminaValue = 0.f;
+	float Value = Frag->RollRandomAttack(Item);
 
-	float RandomValue =
-		Frag->RollRandomValue(Item);
-
-	switch (Item->OptionType)
-	{
-	case EItemOptionType::Attack:
-		AttackValue = RandomValue;
-		break;
-
-	case EItemOptionType::Health:
-		HealthValue = RandomValue;
-		break;
-
-	case EItemOptionType::Stamina:
-		StaminaValue = RandomValue;
-		break;
-	}
-
-	FGameplayEffectContextHandle Context =
-		ASC->MakeEffectContext();
-
-	FGameplayEffectSpecHandle Spec =
-		ASC->MakeOutgoingSpec(
-			Frag->EquipEffect,
-			1.f,
-			Context);
+	FGameplayEffectContextHandle Context = ASC->MakeEffectContext();
+	FGameplayEffectSpecHandle Spec = ASC->MakeOutgoingSpec(Frag->EquipEffect, 1.f, Context);
 
 	if (!Spec.IsValid())
 		return;
 
-	// =========================
-	// 전부 세팅
-	// =========================
-
 	Spec.Data->SetSetByCallerMagnitude(
-		FGameplayTag::RequestGameplayTag(
-			"SetByCaller.Data.AttackPower"),
-		AttackValue
-	);
-
-	Spec.Data->SetSetByCallerMagnitude(
-		FGameplayTag::RequestGameplayTag(
-			"SetByCaller.Data.Health"),
-		HealthValue
-	);
-
-	Spec.Data->SetSetByCallerMagnitude(
-		FGameplayTag::RequestGameplayTag(
-			"SetByCaller.Data.Stamina"),
-		StaminaValue
+		FGameplayTag::RequestGameplayTag("SetByCaller.Data.AttackPower"),
+		Value
 	);
 
 	FActiveGameplayEffectHandle Handle =
-		ASC->ApplyGameplayEffectSpecToSelf(
-			*Spec.Data.Get());
+		ASC->ApplyGameplayEffectSpecToSelf(*Spec.Data.Get());
 
 	ActiveGEMap.Add(Item, Handle);
 }
@@ -686,8 +606,7 @@ FInventorySaveData ULyraInventoryManagerComponent::MakeSaveData() const
 
 	for (const FLyraInventoryEntry& Entry : InventoryList.Entries)
 	{
-		if (!Entry.Instance)
-			continue;
+		if (!Entry.Instance) continue;
 
 		FInventoryEntrySave Data;
 
@@ -695,19 +614,10 @@ FInventorySaveData ULyraInventoryManagerComponent::MakeSaveData() const
 		Data.StackCount = Entry.StackCount;
 		Data.EquipSlotIndex = INDEX_NONE;
 
-		// =========================
-		// 랜덤 데이터 저장
-		// =========================
-
+		// 🔥 랜덤값 저장
 		Data.RandomSeed = Entry.Instance->RandomSeed;
 
-		Data.OptionType =
-			Entry.Instance->OptionType;
-
-		// =========================
-		// 장착 슬롯 저장
-		// =========================
-
+		// Equip 슬롯 저장
 		for (int32 i = 0; i < EquipSlots.Num(); ++i)
 		{
 			if (EquipSlots[i] == Entry.Instance)
@@ -723,30 +633,18 @@ FInventorySaveData ULyraInventoryManagerComponent::MakeSaveData() const
 	return SaveData;
 }
 
-void ULyraInventoryManagerComponent::LoadFromSaveData(
-	const FInventorySaveData& SaveData)
+void ULyraInventoryManagerComponent::LoadFromSaveData(const FInventorySaveData& SaveData)
 {
 	AActor* Owner = GetOwner();
+	if (!Owner) return;
 
-	if (!Owner)
-		return;
+	APlayerController* PC = Cast<APlayerController>(Owner);
+	APlayerState* PS = PC ? PC->GetPlayerState<APlayerState>() : nullptr;
+	if (!PS) return;
 
-	APlayerController* PC =
-		Cast<APlayerController>(Owner);
+	UAbilitySystemComponent* ASC = PS->FindComponentByClass<UAbilitySystemComponent>();
 
-	APlayerState* PS =
-		PC ? PC->GetPlayerState<APlayerState>() : nullptr;
-
-	if (!PS)
-		return;
-
-	UAbilitySystemComponent* ASC =
-		PS->FindComponentByClass<UAbilitySystemComponent>();
-
-	// =========================
-	// 기존 GE 제거
-	// =========================
-
+	// 1. GE 제거
 	if (ASC)
 	{
 		for (auto It = ActiveGEMap.CreateIterator(); It; ++It)
@@ -758,67 +656,39 @@ void ULyraInventoryManagerComponent::LoadFromSaveData(
 		}
 	}
 
-	// =========================
-	// 기존 데이터 초기화
-	// =========================
-
 	ActiveGEMap.Empty();
-
 	InventoryList.Entries.Empty();
-
 	InventoryList.MarkArrayDirty();
-
 	EquipSlots.SetNum(3);
 
 	TMap<int32, ULyraInventoryItemInstance*> IndexToInstance;
 
-	// =========================
-	// 아이템 생성
-	// =========================
-
+	// 2. 생성 (🔥 Seed 복원 핵심)
 	for (int32 i = 0; i < SaveData.Items.Num(); ++i)
 	{
-		const FInventoryEntrySave& Data =
-			SaveData.Items[i];
+		const FInventoryEntrySave& Data = SaveData.Items[i];
 
-		if (!Data.ItemDef)
-			continue;
+		if (!Data.ItemDef) continue;
 
 		ULyraInventoryItemInstance* NewItem =
-			AddItemDefinition(
-				Data.ItemDef,
-				Data.StackCount);
+			AddItemDefinition(Data.ItemDef, Data.StackCount);
 
-		// =========================
-		// 랜덤값 복원
-		// =========================
-
-		NewItem->RandomSeed =
-			Data.RandomSeed;
-
-		NewItem->OptionType =
-			Data.OptionType;
+		// 🔥 핵심: 저장된 Seed 복원
+		NewItem->RandomSeed = Data.RandomSeed;
 
 		IndexToInstance.Add(i, NewItem);
 	}
 
-	// =========================
-	// 장착 복구
-	// =========================
-
+	// 3. Equip 복구
 	for (int32 i = 0; i < SaveData.Items.Num(); ++i)
 	{
-		const FInventoryEntrySave& Data =
-			SaveData.Items[i];
+		const FInventoryEntrySave& Data = SaveData.Items[i];
 
 		if (Data.EquipSlotIndex != INDEX_NONE)
 		{
-			if (ULyraInventoryItemInstance** Found =
-				IndexToInstance.Find(i))
+			if (ULyraInventoryItemInstance** Found = IndexToInstance.Find(i))
 			{
-				EquipFromInventory(
-					Data.EquipSlotIndex,
-					*Found);
+				EquipFromInventory(Data.EquipSlotIndex, *Found);
 			}
 		}
 	}

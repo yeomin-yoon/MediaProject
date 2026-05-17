@@ -5,7 +5,6 @@
 #include "ActiveGameplayEffectHandle.h"
 #include "System/GameplayTagStack.h"
 #include "Templates/SubclassOf.h"
-#include "Yeomin/Inventory/InventoryFragment_EquipEffect.h"
 
 #include "LyraInventoryItemInstance.generated.h"
 
@@ -86,7 +85,4 @@ public:
 
 	UPROPERTY()
 	int32 RandomSeed = 0;
-	
-	UPROPERTY()
-	EItemOptionType OptionType = EItemOptionType::Attack;
 };

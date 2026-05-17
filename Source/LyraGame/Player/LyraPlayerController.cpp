@@ -369,19 +369,20 @@ void ALyraPlayerController::MarkLobbyReadyAndMaybeTravelToExperience(const ULyra
 
 void ALyraPlayerController::SaveInventoryBeforeTravel()
 {
+	if (!HasAuthority())
+	{
+		UE_LOG(LogTemp, Warning, TEXT("Save skipped (Not Authority)"));
+		return;
+	}
+
+	UE_LOG(LogTemp, Warning, TEXT("=== SaveInventoryBeforeTravel START ==="));
+
 	UInventorySaveSubsystem* SaveSys =
 		GetGameInstance()->GetSubsystem<UInventorySaveSubsystem>();
 
 	if (!SaveSys)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("Save Failed: SaveSys nullptr"));
-		return;
-	}
-
-	APlayerState* PS = GetPlayerState<APlayerState>();
-	if (!PS)
-	{
-		UE_LOG(LogTemp, Warning, TEXT("Save Failed: PlayerState nullptr"));
+		UE_LOG(LogTemp, Error, TEXT("SaveSys NULL"));
 		return;
 	}
 
@@ -390,19 +391,13 @@ void ALyraPlayerController::SaveInventoryBeforeTravel()
 
 	if (!Inv)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("Save Failed: Inventory nullptr"));
-		return;
-	}
-
-	FString PlayerId = PS->GetUniqueId().ToString();
-
-	if (PlayerId.IsEmpty())
-	{
-		UE_LOG(LogTemp, Warning, TEXT("Save Failed: PlayerId Empty"));
+		UE_LOG(LogTemp, Error, TEXT("InventoryComponent NULL"));
 		return;
 	}
 
 	FInventorySaveData Data = Inv->MakeSaveData();
+
+	FString PlayerId = "LocalPlayer";
 
 	SaveSys->SetInventory(PlayerId, Data);
 
@@ -413,44 +408,27 @@ void ALyraPlayerController::LoadInventoryAfterTravel()
 {
 	UInventorySaveSubsystem* SaveSys =
 		GetGameInstance()->GetSubsystem<UInventorySaveSubsystem>();
+		
+	UE_LOG(LogTemp, Warning, TEXT("[LOAD] SaveSys Ptr: %p"), SaveSys);
 
-	if (!SaveSys)
-	{
-		UE_LOG(LogTemp, Warning, TEXT("Load Failed: SaveSys nullptr"));
-		return;
-	}
+	if (!SaveSys) return;
 
 	APlayerState* PS = GetPlayerState<APlayerState>();
-	if (!PS)
+	if (!PS) return;
+
+	FString PlayerId = "LocalPlayer";
+
+	FInventorySaveData Data;
+	if (!SaveSys->GetInventory(PlayerId, Data))
 	{
-		UE_LOG(LogTemp, Warning, TEXT("Load Failed: PlayerState nullptr"));
+		UE_LOG(LogTemp, Warning, TEXT("Load Failed: %s"), *PlayerId);
 		return;
 	}
 
 	ULyraInventoryManagerComponent* Inv =
 		FindComponentByClass<ULyraInventoryManagerComponent>();
 
-	if (!Inv)
-	{
-		UE_LOG(LogTemp, Warning, TEXT("Load Failed: Inventory nullptr"));
-		return;
-	}
-
-	FString PlayerId = PS->GetUniqueId().ToString();
-
-	if (PlayerId.IsEmpty())
-	{
-		UE_LOG(LogTemp, Warning, TEXT("Load Failed: PlayerId Empty"));
-		return;
-	}
-
-	FInventorySaveData Data;
-
-	if (!SaveSys->GetInventory(PlayerId, Data))
-	{
-		UE_LOG(LogTemp, Warning, TEXT("Load Failed: No Saved Data %s"), *PlayerId);
-		return;
-	}
+	if (!Inv) return;
 
 	Inv->LoadFromSaveData(Data);
 
