@@ -387,6 +387,28 @@ bool UActionCombatReactionComponent::ApplyReactionHitToActor(AActor* TargetActor
     return false;
 }
 
+bool UActionCombatReactionComponent::ApplyReactionValues(AActor* InstigatorActor, float PoiseDamage, float KnockdownPower, FVector WorldSpaceImpulseDirection)
+{
+    FActionCombatReactionResult IgnoredResult;
+    return ApplyReactionHit(InstigatorActor, PoiseDamage, KnockdownPower, WorldSpaceImpulseDirection, IgnoredResult);
+}
+
+bool UActionCombatReactionComponent::ApplyReactionValuesToActor(AActor* TargetActor, AActor* InstigatorActor, float PoiseDamage, float KnockdownPower, FVector WorldSpaceImpulseDirection)
+{
+    FActionCombatReactionResult IgnoredResult;
+    return ApplyReactionHitToActor(TargetActor, InstigatorActor, PoiseDamage, KnockdownPower, WorldSpaceImpulseDirection, IgnoredResult);
+}
+
+bool UActionCombatReactionComponent::ApplyPoiseDamageToActor(AActor* TargetActor, AActor* InstigatorActor, float PoiseDamage, FVector WorldSpaceImpulseDirection)
+{
+    return ApplyReactionValuesToActor(TargetActor, InstigatorActor, PoiseDamage, 0.0f, WorldSpaceImpulseDirection);
+}
+
+bool UActionCombatReactionComponent::ApplyKnockdownPowerToActor(AActor* TargetActor, AActor* InstigatorActor, float KnockdownPower, FVector WorldSpaceImpulseDirection)
+{
+    return ApplyReactionValuesToActor(TargetActor, InstigatorActor, 0.0f, KnockdownPower, WorldSpaceImpulseDirection);
+}
+
 bool UActionCombatReactionComponent::ForceKnockdown(AActor* InstigatorActor, FVector WorldSpaceImpulseDirection)
 {
     return ForceKnockdownInternal(InstigatorActor, WorldSpaceImpulseDirection, nullptr);
