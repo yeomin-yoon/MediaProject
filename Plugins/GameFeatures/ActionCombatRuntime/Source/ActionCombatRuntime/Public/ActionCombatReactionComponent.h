@@ -168,18 +168,6 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Action Combat|Reaction")
     static bool ApplyReactionHitToActor(AActor* TargetActor, AActor* InstigatorActor, float PoiseDamage, float KnockdownPower, FVector WorldSpaceImpulseDirection, FActionCombatReactionResult& OutResult);
 
-    UFUNCTION(BlueprintCallable, Category = "Action Combat|Reaction")
-    bool ApplyReactionValues(AActor* InstigatorActor = nullptr, float PoiseDamage = 0.0f, float KnockdownPower = 0.0f, FVector WorldSpaceImpulseDirection = FVector::ZeroVector);
-
-    UFUNCTION(BlueprintCallable, Category = "Action Combat|Reaction")
-    static bool ApplyReactionValuesToActor(AActor* TargetActor, AActor* InstigatorActor = nullptr, float PoiseDamage = 0.0f, float KnockdownPower = 0.0f, FVector WorldSpaceImpulseDirection = FVector::ZeroVector);
-
-    UFUNCTION(BlueprintCallable, Category = "Action Combat|Reaction")
-    static bool ApplyPoiseDamageToActor(AActor* TargetActor, AActor* InstigatorActor = nullptr, float PoiseDamage = 0.0f, FVector WorldSpaceImpulseDirection = FVector::ZeroVector);
-
-    UFUNCTION(BlueprintCallable, Category = "Action Combat|Reaction")
-    static bool ApplyKnockdownPowerToActor(AActor* TargetActor, AActor* InstigatorActor = nullptr, float KnockdownPower = 0.0f, FVector WorldSpaceImpulseDirection = FVector::ZeroVector);
-
     void PlayReplicatedReactionCue(EActionCombatReactionState NewState, FVector_NetQuantizeNormal WorldSpaceImpulseDirection, FVector_NetQuantize WorldSpaceActorLocation, int32 CueId);
 
     UFUNCTION(BlueprintCallable, Category = "Action Combat|Reaction")
