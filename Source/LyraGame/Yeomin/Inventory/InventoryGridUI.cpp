@@ -35,10 +35,20 @@ void UInventoryGridUI::InitInventory()
 
 	for (ULyraInventoryItemInstance* Item : Items)
 	{
-		if (!Item) continue;
+		if (!Item)
+			continue;
 
-		// 🔥 핵심: Equip된 아이템은 인벤토리에 표시하지 않음
+		// Equip 슬롯 제외
 		if (InventoryComp->IsEquipped(Item))
+		{
+			continue;
+		}
+
+		FString DefName =
+			Item->GetItemDef()->GetName();
+
+		// 랜덤 장비만 표시
+		if (!DefName.Contains("EquipItem"))
 		{
 			continue;
 		}

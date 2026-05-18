@@ -4,7 +4,6 @@
 #include "InventoryTileUI.h"
 #include "InventoryDragDrop.h"
 #include "Components/Image.h"
-#include "Inventory/InventoryFragment_QuickBarIcon.h"
 #include "Inventory/LyraInventoryItemInstance.h"
 #include "Inventory/LyraInventoryManagerComponent.h"
 
@@ -52,40 +51,102 @@ void UInventoryTileUI::NativeOnDragDetected(
 }
 
 
-void UInventoryTileUI::NativeOnListItemObjectSet(UObject* ListItemObject)
+void UInventoryTileUI::NativeOnListItemObjectSet(
+	UObject* ListItemObject)
 {
-	ULyraInventoryItemInstance* Item = Cast<ULyraInventoryItemInstance>(ListItemObject);
-	if (!Item) return;
+	ULyraInventoryItemInstance* Item =
+		Cast<ULyraInventoryItemInstance>(
+			ListItemObject);
 
-	ItemInstance = Item;
+	if (!Item)
+		return;
 
-	const UInventoryFragment_QuickBarIcon* IconFragment =
-		Item->FindFragmentByClass<UInventoryFragment_QuickBarIcon>();
-
-	if (!IconFragment || !TileIMG) return;
-
-	TileIMG->SetBrush(IconFragment->Brush);
+	SetItemInstance(Item);
 }
 
-void UInventoryTileUI::SetItemInstance(ULyraInventoryItemInstance* NewItem)
+void UInventoryTileUI::SetItemInstance(
+	ULyraInventoryItemInstance* NewItem)
 {
 	ItemInstance = NewItem;
-	
-	if (!ItemInstance)
+
+	// =========================
+	// 안정성 체크
+	// =========================
+
+	if (!TileIMG)
 	{
-		if (TileIMG)
-		{
-			TileIMG->SetBrushFromTexture(nullptr);
-		}
+		UE_LOG(LogTemp, Error,
+			TEXT("TileIMG Is Null"));
 		return;
 	}
 
-	const auto* Fragment = ItemInstance->FindFragmentByClass<UInventoryFragment_QuickBarIcon>();
-    
-	if (Fragment)
+	if (!ItemInstance)
 	{
-		TileIMG->SetBrush(Fragment->Brush);
+		TileIMG->SetBrushFromTexture(nullptr);
+		return;
 	}
+	
+	// =========================
+	// 옵션 타입별 설정
+	// =========================
+
+	FString Prefix;
+	int32 MaxIndex = 0;
+
+	switch (ItemInstance->OptionType)
+	{
+	case EItemOptionType::Attack:
+		Prefix = TEXT("RedFragment_");
+		MaxIndex = 14;
+		break;
+
+	case EItemOptionType::Health:
+		Prefix = TEXT("YellowFragment_");
+		MaxIndex = 13;
+		break;
+
+	case EItemOptionType::Stamina:
+		Prefix = TEXT("BlueFragment_");
+		MaxIndex = 11;
+		break;
+
+	default:
+		return;
+	}
+
+	// =========================
+	// Seed 기반 랜덤
+	// =========================
+
+	FRandomStream Stream(
+		ItemInstance->RandomSeed);
+
+	int32 IconIndex =
+		Stream.RandRange(0, MaxIndex);
+
+	FString AssetPath = FString::Printf(
+		TEXT("/Game/Loot_Drop_VFX/LootUIIMG/%s%d.%s%d"),
+		*Prefix,
+		IconIndex,
+		*Prefix,
+		IconIndex
+	);
+
+	UTexture2D* LoadedTexture =
+		LoadObject<UTexture2D>(
+			nullptr,
+			*AssetPath
+		);
+
+	if (!LoadedTexture)
+	{
+		UE_LOG(LogTemp, Error,
+			TEXT("Texture Load Failed"));
+		return;
+	}
+
+	TileIMG->SetBrushFromTexture(
+		LoadedTexture);
 }
 
 void UInventoryTileUI::RemoveItem()

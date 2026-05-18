@@ -39,47 +39,73 @@ FString FLyraInventoryEntry::GetDebugString() const
 //////////////////////////////////////////////////////////////////////
 // FLyraInventoryList
 
-void FLyraInventoryList::PreReplicatedRemove(const TArrayView<int32> RemovedIndices, int32 FinalSize)
+void FLyraInventoryList::PreReplicatedRemove(
+	const TArrayView<int32> RemovedIndices,
+	int32 FinalSize)
 {
 	for (int32 Index : RemovedIndices)
 	{
-		FLyraInventoryEntry& Stack = Entries[Index];
-		BroadcastChangeMessage(Stack, /*OldCount=*/ Stack.StackCount, /*NewCount=*/ 0);
-		Stack.LastObservedCount = 0;
+		FLyraInventoryEntry& Entry = Entries[Index];
+
+		BroadcastChangeMessage(Entry, Entry.StackCount, 0);
+		Entry.LastObservedCount = 0;
 	}
 }
 
-void FLyraInventoryList::PostReplicatedAdd(const TArrayView<int32> AddedIndices, int32 FinalSize)
+void FLyraInventoryList::PostReplicatedAdd(
+	const TArrayView<int32> AddedIndices,
+	int32 FinalSize)
 {
 	for (int32 Index : AddedIndices)
 	{
-		FLyraInventoryEntry& Stack = Entries[Index];
-		BroadcastChangeMessage(Stack, /*OldCount=*/ 0, /*NewCount=*/ Stack.StackCount);
-		Stack.LastObservedCount = Stack.StackCount;
+		FLyraInventoryEntry& Entry = Entries[Index];
+
+		BroadcastChangeMessage(Entry, 0, Entry.StackCount);
+		Entry.LastObservedCount = Entry.StackCount;
 	}
 }
 
-void FLyraInventoryList::PostReplicatedChange(const TArrayView<int32> ChangedIndices, int32 FinalSize)
+void FLyraInventoryList::PostReplicatedChange(
+	const TArrayView<int32> ChangedIndices,
+	int32 FinalSize)
 {
 	for (int32 Index : ChangedIndices)
 	{
-		FLyraInventoryEntry& Stack = Entries[Index];
-		check(Stack.LastObservedCount != INDEX_NONE);
-		BroadcastChangeMessage(Stack, /*OldCount=*/ Stack.LastObservedCount, /*NewCount=*/ Stack.StackCount);
-		Stack.LastObservedCount = Stack.StackCount;
+		FLyraInventoryEntry& Entry = Entries[Index];
+
+		BroadcastChangeMessage(
+			Entry,
+			Entry.LastObservedCount,
+			Entry.StackCount
+		);
+
+		Entry.LastObservedCount = Entry.StackCount;
 	}
 }
 
-void FLyraInventoryList::BroadcastChangeMessage(FLyraInventoryEntry& Entry, int32 OldCount, int32 NewCount)
+void FLyraInventoryList::BroadcastChangeMessage(
+	FLyraInventoryEntry& Entry,
+	int32 OldCount,
+	int32 NewCount)
 {
+	if (!OwnerComponent)
+		return;
+
+	UWorld* World = OwnerComponent->GetWorld();
+	if (!World)
+		return;
+
 	FLyraInventoryChangeMessage Message;
 	Message.InventoryOwner = OwnerComponent;
 	Message.Instance = Entry.Instance;
 	Message.NewCount = NewCount;
 	Message.Delta = NewCount - OldCount;
 
-	UGameplayMessageSubsystem& MessageSystem = UGameplayMessageSubsystem::Get(OwnerComponent->GetWorld());
-	MessageSystem.BroadcastMessage(TAG_Lyra_Inventory_Message_StackChanged, Message);
+	UGameplayMessageSubsystem::Get(World)
+		.BroadcastMessage(
+			TAG_Lyra_Inventory_Message_StackChanged,
+			Message
+		);
 }
 
 ULyraInventoryItemInstance* FLyraInventoryList::AddEntry(
@@ -97,47 +123,34 @@ ULyraInventoryItemInstance* FLyraInventoryList::AddEntry(
 	NewEntry.Instance = NewObject<ULyraInventoryItemInstance>(Owner);
 	NewEntry.Instance->SetItemDef(ItemDef);
 
-	// ======================================
-	// 랜덤 데이터 생성
-	// ======================================
-
-	// Seed 생성
 	if (NewEntry.Instance->RandomSeed == 0)
 	{
 		NewEntry.Instance->RandomSeed = FMath::Rand();
 	}
 
-	// RandomStream
 	FRandomStream Stream(NewEntry.Instance->RandomSeed);
 
-	// 옵션 타입 결정
 	int32 RandomOption = Stream.RandRange(0, 2);
 
 	switch (RandomOption)
 	{
 	case 0:
-		NewEntry.Instance->OptionType =
-			EItemOptionType::Attack;
+		NewEntry.Instance->OptionType = EItemOptionType::Attack;
 		break;
-
 	case 1:
-		NewEntry.Instance->OptionType =
-			EItemOptionType::Health;
+		NewEntry.Instance->OptionType = EItemOptionType::Health;
 		break;
-
 	case 2:
-		NewEntry.Instance->OptionType =
-			EItemOptionType::Stamina;
+		NewEntry.Instance->OptionType = EItemOptionType::Stamina;
 		break;
 	}
 
-	// 값 랜덤용
-	NewEntry.Instance->RandomValue =
-		Stream.FRand();
-
+	NewEntry.Instance->RandomValue = Stream.FRand();
 	NewEntry.StackCount = StackCount;
 
 	MarkItemDirty(NewEntry);
+	
+	BroadcastChangeMessage(NewEntry, 0, StackCount);
 
 	return NewEntry.Instance;
 }
@@ -151,7 +164,6 @@ void FLyraInventoryList::AddEntry(ULyraInventoryItemInstance* Instance)
 	if (!Owner || !Owner->HasAuthority())
 		return;
 
-	// 🔥 핵심: 이미 Inventory에 있는지만 체크
 	for (const FLyraInventoryEntry& Entry : Entries)
 	{
 		if (Entry.Instance == Instance)
@@ -159,11 +171,13 @@ void FLyraInventoryList::AddEntry(ULyraInventoryItemInstance* Instance)
 	}
 
 	FLyraInventoryEntry& NewEntry = Entries.AddDefaulted_GetRef();
+
 	NewEntry.Instance = Instance;
 	NewEntry.StackCount = 1;
 	NewEntry.LastObservedCount = 1;
 
 	MarkItemDirty(NewEntry);
+	
 	BroadcastChangeMessage(NewEntry, 0, 1);
 }
 
@@ -225,9 +239,6 @@ void FLyraInventoryList::SwapEntries(
 
 	MarkItemDirty(Entries[IndexA]);
 	MarkItemDirty(Entries[IndexB]);
-
-	BroadcastChangeMessage(Entries[IndexA], 0, 0);
-	BroadcastChangeMessage(Entries[IndexB], 0, 0);
 }
 
 //////////////////////////////////////////////////////////////////////

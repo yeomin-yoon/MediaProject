@@ -26,7 +26,7 @@ void UInventoryScreenUI::NativeConstruct()
 {
 	Super::NativeConstruct();
 
-	// 🔥 1프레임 지연 (핵심)
+	// 1프레임 지연 (핵심)
 	GetWorld()->GetTimerManager().SetTimerForNextTick(this, &UInventoryScreenUI::InitDeferred);
 }
 

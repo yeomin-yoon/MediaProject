@@ -71,4 +71,20 @@ const ULyraInventoryItemFragment* ULyraInventoryItemInstance::FindFragmentByClas
 	return nullptr;
 }
 
+FText ULyraInventoryItemInstance::GetDisplayNameByOption() const
+{
+	switch (OptionType)
+	{
+	case EItemOptionType::Attack:
+		return FText::FromString(TEXT("Shard of Attack"));
 
+	case EItemOptionType::Health:
+		return FText::FromString(TEXT("Shard of Vitality"));
+
+	case EItemOptionType::Stamina:
+		return FText::FromString(TEXT("Shard of Endurance"));
+
+	default:
+		return FText::FromString(TEXT("Unknown Shard"));
+	}
+}

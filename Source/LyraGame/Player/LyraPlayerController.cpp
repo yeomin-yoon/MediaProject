@@ -35,6 +35,7 @@
 #include "HttpServerModule.h"
 #endif
 
+#include "Blueprint/UserWidget.h"
 #include "Inventory/LyraInventoryManagerComponent.h"
 #include "Yeomin/Inventory/InventorySaveSubsystem.h"
 
@@ -83,6 +84,14 @@ void ALyraPlayerController::BeginPlay()
 	}
 	#endif
 	SetActorHiddenInGame(false);
+	
+	UClass* WidgetClass = LoadClass<UUserWidget>(
+		nullptr,
+		TEXT("/ShooterExplorer/UserInterface/W_ItemAcquiredList.W_ItemAcquiredList_C")
+	);
+
+	UUserWidget* Widget = CreateWidget<UUserWidget>(this, WidgetClass);
+	Widget->AddToViewport(9999);
 }
 
 void ALyraPlayerController::EndPlay(const EEndPlayReason::Type EndPlayReason)
