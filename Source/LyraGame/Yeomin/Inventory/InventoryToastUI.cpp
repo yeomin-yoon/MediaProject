@@ -84,6 +84,51 @@ void UInventoryToastUI::HandleInventoryMessage(
 	Entry->ItemText = FText::FromString(
 		FString::Printf(TEXT("1x %s"), *ItemName)
 	);
+	
+	// =========================
+	// 아이콘 생성
+	// =========================
+
+	FString Prefix;
+	int32 MaxIndex = 0;
+
+	switch (Message.Instance->OptionType)
+	{
+	case EItemOptionType::Attack:
+		Prefix = TEXT("RedFragment_");
+		MaxIndex = 14;
+		break;
+
+	case EItemOptionType::Health:
+		Prefix = TEXT("YellowFragment_");
+		MaxIndex = 13;
+		break;
+
+	case EItemOptionType::Stamina:
+		Prefix = TEXT("BlueFragment_");
+		MaxIndex = 11;
+		break;
+	}
+
+	FRandomStream Stream(
+		Message.Instance->RandomSeed);
+
+	int32 IconIndex =
+		Stream.RandRange(0, MaxIndex);
+
+	FString AssetPath = FString::Printf(
+		TEXT("/Game/Loot_Drop_VFX/LootUIIMG/%s%d.%s%d"),
+		*Prefix,
+		IconIndex,
+		*Prefix,
+		IconIndex
+	);
+
+	Entry->Icon =
+		LoadObject<UTexture2D>(
+			nullptr,
+			*AssetPath
+		);
 
 	ToastListWidget->AddItem(Entry);
 
