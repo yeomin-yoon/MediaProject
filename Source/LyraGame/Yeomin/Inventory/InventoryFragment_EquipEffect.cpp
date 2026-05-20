@@ -39,9 +39,16 @@ UInventoryFragment_EquipEffect::RollRandomOptionType(
 EItemRarity UInventoryFragment_EquipEffect::EvaluateRarity(
 	float Value) const
 {
-	float Ratio =
+	const float Range = MaxValue - MinValue;
+
+	if (FMath::IsNearlyZero(Range))
+	{
+		return EItemRarity::Common;
+	}
+
+	const float Ratio =
 		(Value - MinValue)
-		/ (MaxValue - MinValue);
+		/ Range;
 
 	if (Ratio >= 0.9f)
 	{

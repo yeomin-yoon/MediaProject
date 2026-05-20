@@ -4,6 +4,7 @@
 #include "InventoryGridUI.h"
 #include "Inventory/LyraInventoryManagerComponent.h"
 #include "CommonTileView.h"
+#include "Inventory/LyraInventoryItemDefinition.h"
 #include "Inventory/LyraInventoryItemInstance.h"
 
 void UInventoryGridUI::NativeConstruct()

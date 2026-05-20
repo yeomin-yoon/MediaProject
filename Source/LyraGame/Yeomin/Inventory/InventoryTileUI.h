@@ -5,6 +5,7 @@
 #include "Blueprint/IUserObjectListEntry.h"
 #include "InventoryTileUI.generated.h"
 
+class ALyraWorldCollectable;
 class UInventoryItemToolTipUI;
 class ULyraInventoryManagerComponent;
 class UImage;
@@ -16,16 +17,12 @@ class LYRAGAME_API UInventoryTileUI : public UUserWidget, public IUserObjectList
 	GENERATED_BODY()
 	
 public:
-	virtual void NativeConstruct() override;
 	// ListView에서 데이터 들어올 때 호출됨
 	virtual void NativeOnListItemObjectSet(UObject* ListItemObject) override;
 
 public:
 	UPROPERTY(BlueprintReadWrite, Category="Inventory")
 	TObjectPtr<ULyraInventoryItemInstance> ItemInstance = nullptr;
-    
-	UPROPERTY()
-	TObjectPtr<ULyraInventoryManagerComponent> CachedInventory;
 	
 	void SetItemInstance(ULyraInventoryItemInstance* NewItem);
 	
@@ -51,6 +48,14 @@ protected:
 		const FDragDropEvent& InDragDropEvent,
 		UDragDropOperation* InOperation
 	) override;
+	
+	virtual void NativeOnDragCancelled(
+		const FDragDropEvent& InDragDropEvent,
+		UDragDropOperation* InOperation
+	) override;
+	
+	UPROPERTY(EditDefaultsOnly, Category="Drop")
+	TSubclassOf<ALyraWorldCollectable> ItemDropClass;
 	
 	UPROPERTY(EditAnywhere)
 	TSubclassOf<UInventoryItemToolTipUI> TooltipClass;

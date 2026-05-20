@@ -2,7 +2,7 @@
 
 #include "CoreMinimal.h"
 #include "Subsystems/GameInstanceSubsystem.h"
-#include "InventoryFragment_EquipEffect.h"
+#include "Inventory/LyraInventoryItemInstance.h"
 #include "InventorySaveSubsystem.generated.h"
 
 class ULyraInventoryItemDefinition;
@@ -27,9 +27,11 @@ struct FInventoryEntrySave
 	UPROPERTY()
 	int32 RandomSeed = 0;
 
-	// 추가
 	UPROPERTY()
 	EItemOptionType OptionType = EItemOptionType::Attack;
+
+	UPROPERTY()
+	EItemRarity Rarity = EItemRarity::Common;
 };
 
 // ============================
@@ -51,6 +53,7 @@ class LYRAGAME_API UInventorySaveSubsystem
 	GENERATED_BODY()
 
 public:
+	virtual void Initialize(FSubsystemCollectionBase& Collection) override;
 
 	void SetInventory(
 		const FString& PlayerId,
@@ -60,8 +63,35 @@ public:
 		const FString& PlayerId,
 		FInventorySaveData& OutData) const;
 
-private:
+	bool HasInventory(
+		const FString& PlayerId) const;
 
+	void ClearInventory(
+		const FString& PlayerId);
+
+	void ClearAllInventories();
+
+	bool SaveInventoryToDisk(
+		const FString& PlayerId);
+
+	bool LoadInventoryFromDisk(
+		const FString& PlayerId,
+		FInventorySaveData& OutData);
+
+	bool SaveAllToDisk();
+
+	bool LoadAllFromDisk();
+
+private:
+	static FString MakeSaveSlotName();
+
+private:
 	UPROPERTY()
 	TMap<FString, FInventorySaveData> SavedInventories;
+
+	UPROPERTY()
+	FString SaveSlotName = TEXT("InventorySave");
+
+	UPROPERTY()
+	int32 UserIndex = 0;
 };

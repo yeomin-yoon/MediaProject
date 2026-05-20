@@ -2,6 +2,7 @@
 
 #include "IPickupable.h"
 
+#include "LyraInventoryItemDefinition.h"
 #include "GameFramework/Actor.h"
 #include "LyraInventoryManagerComponent.h"
 #include "UObject/ScriptInterface.h"
@@ -50,20 +51,16 @@ void UPickupableStatics::AddPickupToInventory(
 	// =========================
 	for (const FPickupTemplate& Template : PickupInventory.Templates)
 	{
-		ULyraInventoryItemInstance* NewItem =
-			InventoryComponent->AddItemDefinition(
-				Template.ItemDef,
-				Template.StackCount,
-				Template.RandomSeed,
-				Template.OptionType,
-				Template.Rarity
-			);
+		if (!Template.ItemDef)
+			continue;
 
-		if (NewItem)
-		{
-			// 🔥 여기서 확정
-			NewItem->Rarity = Template.Rarity;
-		}
+		InventoryComponent->AddItemDefinition(
+			Template.ItemDef,
+			Template.StackCount,
+			Template.RandomSeed,
+			Template.OptionType,
+			Template.Rarity
+		);
 	}
 
 	// =========================

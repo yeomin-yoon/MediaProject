@@ -11,11 +11,6 @@ UItemDropComponent::UItemDropComponent()
 	PrimaryComponentTick.bCanEverTick = false;
 }
 
-void UItemDropComponent::BeginPlay()
-{
-	Super::BeginPlay();
-}
-
 void UItemDropComponent::DropItems()
 {
 	if (!ItemClass) return;
@@ -69,15 +64,21 @@ void UItemDropComponent::SpawnOneItem()
 	if (!Item)
 		return;
 
+	if (!Item->StaticInventory.Templates.IsValidIndex(0))
+	{
+		CurrentDropCount++;
+		return;
+	}
+
 	// =========================
-	// 1. Seed (절대 고정값)
+	// 1. Seed
 	// =========================
 	Item->RandomSeed = FMath::Rand();
 
 	FRandomStream Stream(Item->RandomSeed);
 
 	// =========================
-	// 2. OptionType (Drop에서 1회 결정)
+	// 2. OptionType
 	// =========================
 	switch (Stream.RandRange(0, 2))
 	{
@@ -87,7 +88,7 @@ void UItemDropComponent::SpawnOneItem()
 	}
 
 	// =========================
-	// 3. Rarity (Drop에서 1회 결정)
+	// 3. Rarity
 	// =========================
 	const ULyraInventoryItemDefinition* DefCDO =
 		GetDefault<ULyraInventoryItemDefinition>(
@@ -108,7 +109,7 @@ void UItemDropComponent::SpawnOneItem()
 	}
 
 	// =========================
-	// 4. 🔥 핵심: PickupTemplate에도 그대로 고정
+	// 4. PickupTemplate에도 그대로 고정
 	// =========================
 	Item->StaticInventory.Templates[0].RandomSeed = Item->RandomSeed;
 	Item->StaticInventory.Templates[0].OptionType = Item->OptionType;

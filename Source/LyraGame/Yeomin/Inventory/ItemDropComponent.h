@@ -6,7 +6,6 @@
 #include "Components/ActorComponent.h"
 #include "ItemDropComponent.generated.h"
 
-class UNiagaraSystem;
 class ALyraWorldCollectable;
 
 UCLASS(ClassGroup=(Custom), meta=(BlueprintSpawnableComponent))
@@ -18,8 +17,6 @@ public:
 	UItemDropComponent();
 
 protected:
-	virtual void BeginPlay() override;
-	
 	UFUNCTION(BlueprintCallable)
 	void DropItems();
 

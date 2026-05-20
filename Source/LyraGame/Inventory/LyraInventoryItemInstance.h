@@ -94,13 +94,10 @@ private:
 	
 public:
 	UPROPERTY()
-	float RandomValue = 0.f;
-
-	UPROPERTY()
 	int32 RandomSeed = 0;
 	
 	UPROPERTY()
-	EItemRarity Rarity;
+	EItemRarity Rarity = EItemRarity::Common;
 	
 	UPROPERTY()
 	EItemOptionType OptionType = EItemOptionType::Attack;

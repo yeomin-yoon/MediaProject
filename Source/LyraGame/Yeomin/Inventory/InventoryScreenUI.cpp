@@ -1,8 +1,4 @@
 ﻿#include "InventoryScreenUI.h"
-#include "AbilitySystemComponent.h"
-#include "GameFramework/PlayerState.h"
-#include "AbilitySystemInterface.h"
-#include "CommonTileView.h"
 #include "CommonUIExtensions.h"
 #include "InventoryDragDrop.h"
 #include "InventoryGridUI.h"
@@ -26,15 +22,12 @@ void UInventoryScreenUI::NativeConstruct()
 {
 	Super::NativeConstruct();
 
-	// 1프레임 지연 (핵심)
+	// 1프레임 지연
 	GetWorld()->GetTimerManager().SetTimerForNextTick(this, &UInventoryScreenUI::InitDeferred);
 }
 
 void UInventoryScreenUI::InitDeferred()
 {
-	if (!GetOwningPlayer())
-		return;
-
 	APlayerController* PC = GetOwningPlayer();
 	if (!PC)
 		return;
@@ -42,19 +35,6 @@ void UInventoryScreenUI::InitDeferred()
 	CachedInventory = PC->FindComponentByClass<ULyraInventoryManagerComponent>();
 	if (!IsValid(CachedInventory))
 		return;
-
-	// ASC 가져오기
-	APawn* Pawn = GetOwningPlayerPawn();
-	APlayerState* PS = Pawn ? Pawn->GetPlayerState() : nullptr;
-
-	if (PS)
-	{
-		IAbilitySystemInterface* ASCInterface = Cast<IAbilitySystemInterface>(PS);
-		if (ASCInterface)
-		{
-			CachedASC = ASCInterface->GetAbilitySystemComponent();
-		}
-	}
 
 	// Equip Widgets 생성
 	EquipWidgets.SetNum(3);
@@ -67,34 +47,11 @@ void UInventoryScreenUI::InitDeferred()
 		);
 	}
 
-	// Equip Slots 세팅
-	EquipSlots.SetNum(3);
-
-	if (EquipSlotBorder1)
-	{
-		EquipSlots[0].SlotIndex = 0;
-		EquipSlots[0].Border = EquipSlotBorder1;
-	}
-
-	if (EquipSlotBorder2)
-	{
-		EquipSlots[1].SlotIndex = 1;
-		EquipSlots[1].Border = EquipSlotBorder2;
-	}
-
-	if (EquipSlotBorder3)
-	{
-		EquipSlots[2].SlotIndex = 2;
-		EquipSlots[2].Border = EquipSlotBorder3;
-	}
-
-	// 🔥 Delegate 안전 바인딩
-	if (CachedInventory)
-	{
-		CachedInventory->OnEquipChanged.RemoveAll(this);
-		CachedInventory->OnEquipChanged.AddUObject(this, &UInventoryScreenUI::RefreshEquipSlots);
-	}
-
+	// Delegate 안전 바인딩
+	CachedInventory->OnInventoryChanged.RemoveAll(this);
+	CachedInventory->OnInventoryChanged.AddUObject(this, &UInventoryScreenUI::RefreshEquipSlots);
+	CachedInventory->OnInventoryChanged.AddUObject(this, &UInventoryScreenUI::RefreshInventoryGrid);
+	
 	RefreshEquipSlots();
 }
 
@@ -106,6 +63,8 @@ bool UInventoryScreenUI::NativeOnDrop(
 	UInventoryDragDrop* DragOp = Cast<UInventoryDragDrop>(InOperation);
 	if (!DragOp || !CachedInventory)
 		return false;
+	
+	DragOp->bDroppedOnValidTarget = true;
 
 	const FVector2D ScreenPos = InDragDropEvent.GetScreenSpacePosition();
 
@@ -125,6 +84,8 @@ bool UInventoryScreenUI::NativeOnDrop(
 	{
 		CachedInventory->EquipFromInventory(SlotIndex, DragOp->Item);
 
+		DragOp->bDroppedOnValidTarget = true;
+		
 		if (WidgetGridUI)
 			WidgetGridUI->InitInventory();
 
@@ -157,6 +118,14 @@ void UInventoryScreenUI::RefreshEquipSlots()
 	UpdateSlot(EquipSlotBorder1, 0);
 	UpdateSlot(EquipSlotBorder2, 1);
 	UpdateSlot(EquipSlotBorder3, 2);
+}
+
+void UInventoryScreenUI::RefreshInventoryGrid()
+{
+	if (WidgetGridUI)
+	{
+		WidgetGridUI->InitInventory();
+	}
 }
 
 void UInventoryScreenUI::UpdateSlot(UBorder* EquipSlot, int32 Index)

@@ -130,6 +130,9 @@ private:
 	UPROPERTY()
 	TObjectPtr<APlayerState> LastSeenPlayerState;
 
+	UPROPERTY()
+	bool bInventoryLoadedFromSave = false;
+
 private:
 	UFUNCTION()
 	void OnPlayerStateChangedTeam(UObject* TeamAgent, int32 OldTeam, int32 NewTeam);
@@ -146,6 +149,10 @@ private:
 public:
 	void SaveInventoryBeforeTravel();
 	void LoadInventoryAfterTravel();
+
+private:
+	FString GetInventorySavePlayerId() const;
+
 protected:
 	void TravelConnectedLobbyToExperience(const ULyraUserFacingExperienceDefinition* UserFacingExperience);
 

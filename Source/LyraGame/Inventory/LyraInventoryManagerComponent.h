@@ -6,7 +6,6 @@
 #include "Components/ActorComponent.h"
 #include "Net/Serialization/FastArraySerializer.h"
 #include "Yeomin/Inventory/InventorySaveSubsystem.h"
-
 #include "LyraInventoryManagerComponent.generated.h"
 
 class ULyraInventoryItemDefinition;
@@ -19,6 +18,7 @@ struct FNetDeltaSerializeInfo;
 struct FReplicationFlags;
 
 DECLARE_MULTICAST_DELEGATE(FOnEquipChanged);
+DECLARE_MULTICAST_DELEGATE(FOnInventoryChanged);
 
 /** A message when an item is added to the inventory */
 USTRUCT(BlueprintType)
@@ -40,10 +40,10 @@ struct FLyraInventoryChangeMessage
 	int32 Delta = 0;
 	
 	UPROPERTY()
-	EItemRarity Rarity;
+	EItemRarity Rarity = EItemRarity::Common;
 
 	UPROPERTY()
-	EItemOptionType OptionType;
+	EItemOptionType OptionType = EItemOptionType::Attack;
 };
 
 /** A single entry in an inventory */
@@ -161,10 +161,12 @@ public:
 
 	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category=Inventory)
 	void RemoveItemInstance(ULyraInventoryItemInstance* ItemInstance);
-	
+	void RemoveItemFromAnywhere(ULyraInventoryItemInstance* Item);
+
 	UPROPERTY()
 	TMap<TObjectPtr<ULyraInventoryItemInstance>, FActiveGameplayEffectHandle> ActiveGEMap;
 	FOnEquipChanged OnEquipChanged;
+	FOnInventoryChanged OnInventoryChanged;
 	TArray<TObjectPtr<ULyraInventoryItemInstance>> EquipSlots;
 	void EquipSwap(int32 SlotIndex, ULyraInventoryItemInstance* NewItem);
 	bool IsEquipped(ULyraInventoryItemInstance* Item) const;

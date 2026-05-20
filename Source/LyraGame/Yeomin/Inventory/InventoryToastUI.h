@@ -7,10 +7,9 @@
 
 class UListView;
 class UVerticalBox;
-class UItemAcquiredToastEntry;
 
 UCLASS()
-class UInventoryToastUI : public UCommonActivatableWidget
+class LYRAGAME_API UInventoryToastUI : public UCommonActivatableWidget
 {
 	GENERATED_BODY()
 

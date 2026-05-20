@@ -2,8 +2,6 @@
 #include "ItemAcquiredToastEntry.h"
 #include "CommonTextBlock.h"
 #include "Components/Image.h"
-
-#include "CommonTextBlock.h"
 #include "Styling/SlateColor.h"
 
 void UItemAcquiredToastRow::NativeOnListItemObjectSet(UObject* ListItemObject)
@@ -17,14 +15,14 @@ void UItemAcquiredToastRow::NativeOnListItemObjectSet(UObject* ListItemObject)
 	// =========================
 	// 텍스트
 	// =========================
-	ItemNameAndQtyWidget->SetText(Entry->ItemText);
+	if (ItemNameAndQtyWidget)
+	{
+		ItemNameAndQtyWidget->SetText(Entry->ItemText);
 
-	// =========================
-	// 핵심: SlateColor로 적용 (CommonTextBlock 대응)
-	// =========================
-	ItemNameAndQtyWidget->SetColorAndOpacity(
-		FSlateColor(Entry->RarityColor)
-	);
+		ItemNameAndQtyWidget->SetColorAndOpacity(
+			FSlateColor(Entry->RarityColor)
+		);
+	}
 
 	// =========================
 	// 아이콘

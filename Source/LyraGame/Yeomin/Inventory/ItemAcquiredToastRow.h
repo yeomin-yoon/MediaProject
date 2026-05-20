@@ -9,7 +9,7 @@ class UCommonTextBlock;
 class UImage;
 
 UCLASS()
-class UItemAcquiredToastRow : public UCommonUserWidget, public IUserObjectListEntry
+class LYRAGAME_API UItemAcquiredToastRow : public UCommonUserWidget, public IUserObjectListEntry
 {
 	GENERATED_BODY()
 
@@ -24,5 +24,4 @@ protected:
 	TObjectPtr<UImage> ItemIconWidget;
 
 private:
-	FTimerHandle TimerHandle;
 };

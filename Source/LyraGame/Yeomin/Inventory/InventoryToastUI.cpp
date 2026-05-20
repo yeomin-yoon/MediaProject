@@ -4,6 +4,7 @@
 #include "GameFramework/GameplayMessageSubsystem.h"
 #include "NativeGameplayTags.h"
 #include "ItemAcquiredToastEntry.h"
+#include "Inventory/LyraInventoryItemDefinition.h"
 #include "Inventory/LyraInventoryItemInstance.h"
 #include "Inventory/LyraInventoryManagerComponent.h"
 
@@ -76,12 +77,9 @@ void UInventoryToastUI::HandleInventoryMessage(
 	Entry->Icon = Message.Instance->GetIconTexture();
 
 	// =========================
-	// 🔥 Rarity (Message 기준 = 핵심)
+	// Rarity
 	// =========================
 	FLinearColor Color = FLinearColor::White;
-	
-	UE_LOG(LogTemp, Warning, TEXT("Rarity: %d"), (int32)Message.Rarity);
-	UE_LOG(LogTemp, Warning, TEXT("Instance Rarity: %d"), (int32)Message.Instance->Rarity);
 
 	switch (Message.Rarity)
 	{

@@ -4,7 +4,6 @@
 
 #include "CoreMinimal.h"
 #include "Blueprint/UserWidget.h"
-#include "InventoryFragment_EquipEffect.h"
 #include "InventoryItemToolTipUI.generated.h"
 
 class UCommonTextBlock;
@@ -23,11 +22,6 @@ public:
 	void Setup(ULyraInventoryItemInstance* Item);
 
 protected:
-
-	// =========================
-	// Root Border
-	// =========================
-
 	UPROPERTY(meta=(BindWidget))
 	TObjectPtr<UCommonBorder> HeaderBorder;
 

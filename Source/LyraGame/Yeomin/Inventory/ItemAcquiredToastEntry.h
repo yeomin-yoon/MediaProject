@@ -7,7 +7,7 @@
 class ULyraInventoryItemInstance;
 
 UCLASS()
-class UItemAcquiredToastEntry : public UObject
+class LYRAGAME_API UItemAcquiredToastEntry : public UObject
 {
 	GENERATED_BODY()
 
@@ -17,9 +17,6 @@ public:
 
 	UPROPERTY()
 	FText ItemText;
-
-	UPROPERTY()
-	float DisplayDuration = 2.1f;
 
 	UPROPERTY()
 	TObjectPtr<ULyraInventoryItemInstance> ItemInstance;

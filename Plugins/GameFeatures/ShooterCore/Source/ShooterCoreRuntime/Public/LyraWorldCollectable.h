@@ -6,20 +6,19 @@
 #include "Interaction/IInteractableTarget.h"
 #include "Interaction/InteractionOption.h"
 #include "Inventory/IPickupable.h"
-#include "NiagaraSystem.h"
+#include "Inventory/LyraInventoryItemInstance.h"
 #include "LyraWorldCollectable.generated.h"
 
 class UBoxComponent;
 class UNiagaraComponent;
-enum class EItemOptionType : uint8;
+class UNiagaraSystem;
 class UObject;
+class UProjectileMovementComponent;
 struct FInteractionQuery;
 
 /**
  * 
  */
-class UProjectileMovementComponent;
-
 UCLASS(Abstract, Blueprintable)
 class SHOOTERCORERUNTIME_API ALyraWorldCollectable : public AActor, public IInteractableTarget, public IPickupable
 {
@@ -61,13 +60,13 @@ public:
 	TObjectPtr<UProjectileMovementComponent> ProjectileMovement;
 	
 	UPROPERTY(BlueprintReadOnly)
-	EItemOptionType OptionType;
+	EItemOptionType OptionType = EItemOptionType::Attack;
 
 	UPROPERTY(BlueprintReadOnly)
-	int32 RandomSeed;
+	int32 RandomSeed = 0;
 	
 	UPROPERTY(BlueprintReadOnly)
-	EItemRarity Rarity;
+	EItemRarity Rarity = EItemRarity::Common;
 	
 	void ApplyNiagaraByOption();
 };

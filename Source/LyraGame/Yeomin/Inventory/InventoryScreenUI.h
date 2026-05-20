@@ -4,26 +4,11 @@
 #include "CommonActivatableWidget.h"
 #include "InventoryScreenUI.generated.h"
 
-class ULyraInventoryItemInstance;
 class UInventoryGridUI;
-class UGameplayAbility;
-class UAbilitySystemComponent;
 class UBorder;
 class ULyraInventoryManagerComponent;
 class UInventoryTileUI;
 class UDragDropOperation;
-
-USTRUCT()
-struct FEquipSlotRef
-{
-	GENERATED_BODY()
-
-	UPROPERTY()
-	int32 SlotIndex = INDEX_NONE;
-
-	UPROPERTY()
-	TObjectPtr<UBorder> Border = nullptr;
-};
 
 UCLASS()
 class LYRAGAME_API UInventoryScreenUI : public UCommonActivatableWidget
@@ -32,9 +17,6 @@ class LYRAGAME_API UInventoryScreenUI : public UCommonActivatableWidget
 	
 protected:
 	virtual void NativeOnDeactivated() override;
-	
-	UPROPERTY()
-	TArray<FEquipSlotRef> EquipSlots;
 
 	UPROPERTY(meta = (BindWidget))
 	TObjectPtr<UBorder> EquipSlotBorder1;
@@ -46,16 +28,13 @@ protected:
 	TObjectPtr<UBorder> EquipSlotBorder3;
 	
 	UPROPERTY(EditDefaultsOnly, Category="UI")
-	TSubclassOf<class UInventoryTileUI> InventoryTileClass;
+	TSubclassOf<UInventoryTileUI> InventoryTileClass;
 	
 	UPROPERTY()
 	TArray<TObjectPtr<UInventoryTileUI>> EquipWidgets;
 	
 	UPROPERTY()
 	TObjectPtr<ULyraInventoryManagerComponent> CachedInventory;
-	
-	UPROPERTY()
-	TObjectPtr<UAbilitySystemComponent> CachedASC;
 	
 	UPROPERTY(meta = (BindWidget))
 	TObjectPtr<UInventoryGridUI> WidgetGridUI;
@@ -72,5 +51,6 @@ protected:
 
 private:
 	void RefreshEquipSlots();
+	void RefreshInventoryGrid();
 	void UpdateSlot(UBorder* Slot, int32 Index);
 };

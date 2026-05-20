@@ -6,8 +6,8 @@
 #include "Templates/SubclassOf.h"
 #include "UObject/Interface.h"
 
+#include "Inventory/LyraInventoryItemInstance.h"
 #include "UObject/ObjectPtr.h"
-#include "Yeomin/Inventory/InventoryFragment_EquipEffect.h"
 #include "IPickupable.generated.h"
 
 template <typename InterfaceType> class TScriptInterface;
@@ -38,7 +38,7 @@ public:
 	EItemOptionType OptionType = EItemOptionType::Attack;
 	
 	UPROPERTY()
-	EItemRarity Rarity;
+	EItemRarity Rarity = EItemRarity::Common;
 };
 
 USTRUCT(BlueprintType)

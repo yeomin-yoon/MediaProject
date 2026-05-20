@@ -250,7 +250,7 @@ void ULyraInventoryManagerComponent::GetLifetimeReplicatedProps(TArray< FLifetim
 bool ULyraInventoryManagerComponent::CanAddItemDefinition(TSubclassOf<ULyraInventoryItemDefinition> ItemDef, int32 StackCount)
 {
 	//@TODO: Add support for stack limit / uniqueness checks / etc...
-	return true;
+	return ItemDef != nullptr && StackCount > 0;
 }
 
 ULyraInventoryItemInstance* ULyraInventoryManagerComponent::AddItemDefinition(
@@ -307,8 +307,51 @@ void ULyraInventoryManagerComponent::RemoveItemInstance(ULyraInventoryItemInstan
 	{
 		RemoveReplicatedSubObject(ItemInstance);
 	}
+	
+	OnInventoryChanged.Broadcast();
 }
 
+void ULyraInventoryManagerComponent::RemoveItemFromAnywhere(ULyraInventoryItemInstance* Item)
+{
+	if (!Item)
+		return;
+
+	// =========================
+	// 1. Equip 슬롯에서 제거
+	// =========================
+	for (int32 i = 0; i < EquipSlots.Num(); i++)
+	{
+		if (EquipSlots[i] == Item)
+		{
+			APlayerController* PC = Cast<APlayerController>(GetOwner());
+			APlayerState* PS = PC ? PC->GetPlayerState<APlayerState>() : nullptr;
+			UAbilitySystemComponent* ASC = PS ? PS->FindComponentByClass<UAbilitySystemComponent>() : nullptr;
+
+			if (ASC)
+			{
+				RemoveEquipEffect(ASC, Item);
+			}
+
+			EquipSlots[i] = nullptr;
+		}
+	}
+
+	// =========================
+	// 2. Inventory에서 제거
+	// =========================
+	InventoryList.RemoveEntry(Item);
+
+	if (Item && IsUsingRegisteredSubObjectList())
+	{
+		RemoveReplicatedSubObject(Item);
+	}
+
+	// =========================
+	// 3. UI 이벤트
+	// =========================
+	OnEquipChanged.Broadcast();
+	OnInventoryChanged.Broadcast();
+}
 
 void ULyraInventoryManagerComponent::EquipSwap(int32 SlotIndex, ULyraInventoryItemInstance* NewItem)
 {
@@ -599,9 +642,15 @@ void ULyraInventoryManagerComponent::ApplyEquipEffect(
 	if (!ASC)
 		return;
 
+	TSubclassOf<ULyraInventoryItemDefinition> ItemDef = Item->GetItemDef();
+	if (!ItemDef)
+		return;
+
 	const ULyraInventoryItemDefinition* DefCDO =
-		GetDefault<ULyraInventoryItemDefinition>(
-			Item->GetItemDef());
+		GetDefault<ULyraInventoryItemDefinition>(ItemDef);
+
+	if (!DefCDO)
+		return;
 
 	const UInventoryFragment_EquipEffect* Frag =
 		Cast<UInventoryFragment_EquipEffect>(
@@ -609,7 +658,7 @@ void ULyraInventoryManagerComponent::ApplyEquipEffect(
 				UInventoryFragment_EquipEffect::StaticClass())
 		);
 
-	if (!Frag)
+	if (!Frag || !Frag->EquipEffect)
 		return;
 
 	// 기존 제거
@@ -719,6 +768,9 @@ FInventorySaveData ULyraInventoryManagerComponent::MakeSaveData() const
 		Data.OptionType =
 			Entry.Instance->OptionType;
 
+		Data.Rarity =
+			Entry.Instance->Rarity;
+
 		// =========================
 		// 장착 슬롯 저장
 		// =========================
@@ -780,9 +832,9 @@ void ULyraInventoryManagerComponent::LoadFromSaveData(
 	ActiveGEMap.Empty();
 
 	InventoryList.Entries.Empty();
-
 	InventoryList.MarkArrayDirty();
 
+	EquipSlots.Empty();
 	EquipSlots.SetNum(3);
 
 	TMap<int32, ULyraInventoryItemInstance*> IndexToInstance;
@@ -802,17 +854,13 @@ void ULyraInventoryManagerComponent::LoadFromSaveData(
 		ULyraInventoryItemInstance* NewItem =
 			AddItemDefinition(
 				Data.ItemDef,
-				Data.StackCount);
+				Data.StackCount,
+				Data.RandomSeed,
+				Data.OptionType,
+				Data.Rarity);
 
-		// =========================
-		// 랜덤값 복원
-		// =========================
-
-		NewItem->RandomSeed =
-			Data.RandomSeed;
-
-		NewItem->OptionType =
-			Data.OptionType;
+		if (!NewItem)
+			continue;
 
 		IndexToInstance.Add(i, NewItem);
 	}
@@ -837,6 +885,8 @@ void ULyraInventoryManagerComponent::LoadFromSaveData(
 			}
 		}
 	}
+
+	OnEquipChanged.Broadcast();
 }
 
 void ULyraInventoryManagerComponent::BroadcastItemAdded(
@@ -857,7 +907,7 @@ void ULyraInventoryManagerComponent::BroadcastItemAdded(
 	Message.NewCount = Count;
 	Message.Delta = Count;
 
-	// 🔥 핵심: 여기서만 확정값 전달
+	// 여기서 확정값 전달
 	Message.Rarity = Instance->Rarity;
 	Message.OptionType = Instance->OptionType;
 
@@ -884,5 +934,3 @@ void ULyraInventoryManagerComponent::BroadcastItemAdded(
 // public:
 // 	virtual bool PassesFilter(ULyraInventoryItemInstance* Instance) const { return true; }
 // };
-
-

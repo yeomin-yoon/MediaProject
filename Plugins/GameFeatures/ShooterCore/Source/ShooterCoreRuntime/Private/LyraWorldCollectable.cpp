@@ -3,9 +3,10 @@
 #include "LyraWorldCollectable.h"
 
 #include "NiagaraComponent.h"
-#include "Async/TaskGraphInterfaces.h"
+#include "NiagaraSystem.h"
 #include "Components/BoxComponent.h"
 #include "GameFramework/ProjectileMovementComponent.h"
+#include "UObject/ConstructorHelpers.h"
 
 #include UE_INLINE_GENERATED_CPP_BY_NAME(LyraWorldCollectable)
 
@@ -44,14 +45,14 @@ ALyraWorldCollectable::ALyraWorldCollectable()
 	}
 	
 	BoxComp = CreateDefaultSubobject<UBoxComponent>(TEXT("BoxComponent"));
-	BoxComp->SetupAttachment(RootComponent);
+	SetRootComponent(BoxComp);
 	BoxComp->SetBoxExtent(FVector(35.f, 35.f, 51.f));
 	
 	NiagaraComp = CreateDefaultSubobject<UNiagaraComponent>(TEXT("NiagaraComponent"));
 	NiagaraComp->SetupAttachment(BoxComp);
 	NiagaraComp->SetRelativeLocation(FVector(0.f, 0.f, -32.8f));
 	
-	ProjectileMovement = CreateDefaultSubobject<UProjectileMovementComponent>("ProjectileMovement");
+	ProjectileMovement = CreateDefaultSubobject<UProjectileMovementComponent>(TEXT("ProjectileMovement"));
 	
 	ProjectileMovement->InitialSpeed = 0.f;
 	ProjectileMovement->MaxSpeed = 2000.f;
@@ -101,18 +102,25 @@ void ALyraWorldCollectable::ApplyNiagaraByOption()
 	if (!NiagaraComp)
 		return;
 
+	UNiagaraSystem* SelectedSystem = nullptr;
+
 	switch (OptionType)
 	{
 	case EItemOptionType::Attack:
-		NiagaraComp->SetAsset(RedNS);
+		SelectedSystem = RedNS;
 		break;
 
 	case EItemOptionType::Health:
-		NiagaraComp->SetAsset(YellowNS);
+		SelectedSystem = YellowNS;
 		break;
 
 	case EItemOptionType::Stamina:
-		NiagaraComp->SetAsset(BlueNS);
+		SelectedSystem = BlueNS;
 		break;
+	}
+
+	if (SelectedSystem)
+	{
+		NiagaraComp->SetAsset(SelectedSystem);
 	}
 }

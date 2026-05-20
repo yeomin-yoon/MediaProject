@@ -70,32 +70,46 @@ void ALyraPlayerController::PreInitializeComponents()
 void ALyraPlayerController::BeginPlay()
 {
 	Super::BeginPlay();
-	#if WITH_RPC_REGISTRY
+
+#if WITH_RPC_REGISTRY
 	FHttpServerModule::Get().StartAllListeners();
+
 	int32 RpcPort = 0;
 	if (FParse::Value(FCommandLine::Get(), TEXT("rpcport="), RpcPort))
 	{
-		ULyraGameplayRpcRegistrationComponent* ObjectInstance = ULyraGameplayRpcRegistrationComponent::GetInstance();
-		if (ObjectInstance && ObjectInstance->IsValidLowLevel())
+		if (ULyraGameplayRpcRegistrationComponent* ObjectInstance =
+			ULyraGameplayRpcRegistrationComponent::GetInstance())
 		{
 			ObjectInstance->RegisterAlwaysOnHttpCallbacks();
 			ObjectInstance->RegisterInMatchHttpCallbacks();
 		}
 	}
-	#endif
+#endif
+
 	SetActorHiddenInGame(false);
-	
+
+	// ===== UI SAFE LOAD =====
 	UClass* WidgetClass = LoadClass<UUserWidget>(
 		nullptr,
 		TEXT("/ShooterExplorer/UserInterface/W_ItemAcquiredList.W_ItemAcquiredList_C")
 	);
 
-	UUserWidget* Widget = CreateWidget<UUserWidget>(this, WidgetClass);
-	Widget->AddToViewport(9999);
+	if (WidgetClass)
+	{
+		if (UUserWidget* Widget = CreateWidget<UUserWidget>(this, WidgetClass))
+		{
+			Widget->AddToViewport(9999);
+		}
+	}
 }
 
 void ALyraPlayerController::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
+	if (HasAuthority())
+	{
+		SaveInventoryBeforeTravel();
+	}
+	
 	Super::EndPlay(EndPlayReason);
 }
 
@@ -374,96 +388,93 @@ void ALyraPlayerController::MarkLobbyReadyAndMaybeTravelToExperience(const ULyra
 	TravelConnectedLobbyToExperience(UserFacingExperience);
 }
 
+FString ALyraPlayerController::GetInventorySavePlayerId() const
+{
+	const APlayerState* PS = GetPlayerState<APlayerState>();
+	if (!PS)
+	{
+		return FString();
+	}
+
+	const FUniqueNetIdRepl& UniqueId = PS->GetUniqueId();
+	if (UniqueId.IsValid())
+	{
+		const FString UniqueIdString = UniqueId.ToString();
+
+		if (!UniqueIdString.IsEmpty())
+		{
+			return UniqueIdString;
+		}
+	}
+
+	return FString::Printf(TEXT("PlayerId_%d"), PS->GetPlayerId());
+}
+
 // LyraPlayerController.cpp
 
 void ALyraPlayerController::SaveInventoryBeforeTravel()
 {
+	if (!HasAuthority())
+		return;
+
 	UInventorySaveSubsystem* SaveSys =
-		GetGameInstance()->GetSubsystem<UInventorySaveSubsystem>();
+		GetGameInstance() ? GetGameInstance()->GetSubsystem<UInventorySaveSubsystem>() : nullptr;
 
 	if (!SaveSys)
-	{
-		UE_LOG(LogTemp, Warning, TEXT("Save Failed: SaveSys nullptr"));
 		return;
-	}
-
-	APlayerState* PS = GetPlayerState<APlayerState>();
-	if (!PS)
-	{
-		UE_LOG(LogTemp, Warning, TEXT("Save Failed: PlayerState nullptr"));
-		return;
-	}
 
 	ULyraInventoryManagerComponent* Inv =
 		FindComponentByClass<ULyraInventoryManagerComponent>();
 
 	if (!Inv)
-	{
-		UE_LOG(LogTemp, Warning, TEXT("Save Failed: Inventory nullptr"));
 		return;
-	}
 
-	FString PlayerId = PS->GetUniqueId().ToString();
+	const FString PlayerId = GetInventorySavePlayerId();
 
 	if (PlayerId.IsEmpty())
-	{
-		UE_LOG(LogTemp, Warning, TEXT("Save Failed: PlayerId Empty"));
 		return;
-	}
 
-	FInventorySaveData Data = Inv->MakeSaveData();
+	const FInventorySaveData Data = Inv->MakeSaveData();
 
 	SaveSys->SetInventory(PlayerId, Data);
-
-	UE_LOG(LogTemp, Warning, TEXT("Saved Inventory: %s"), *PlayerId);
+	SaveSys->SaveInventoryToDisk(PlayerId);
 }
 
 void ALyraPlayerController::LoadInventoryAfterTravel()
 {
+	if (!HasAuthority())
+		return;
+
+	if (bInventoryLoadedFromSave)
+		return;
+
 	UInventorySaveSubsystem* SaveSys =
-		GetGameInstance()->GetSubsystem<UInventorySaveSubsystem>();
+		GetGameInstance() ? GetGameInstance()->GetSubsystem<UInventorySaveSubsystem>() : nullptr;
 
 	if (!SaveSys)
-	{
-		UE_LOG(LogTemp, Warning, TEXT("Load Failed: SaveSys nullptr"));
 		return;
-	}
-
-	APlayerState* PS = GetPlayerState<APlayerState>();
-	if (!PS)
-	{
-		UE_LOG(LogTemp, Warning, TEXT("Load Failed: PlayerState nullptr"));
-		return;
-	}
 
 	ULyraInventoryManagerComponent* Inv =
 		FindComponentByClass<ULyraInventoryManagerComponent>();
 
 	if (!Inv)
-	{
-		UE_LOG(LogTemp, Warning, TEXT("Load Failed: Inventory nullptr"));
 		return;
-	}
 
-	FString PlayerId = PS->GetUniqueId().ToString();
+	const FString PlayerId = GetInventorySavePlayerId();
 
 	if (PlayerId.IsEmpty())
-	{
-		UE_LOG(LogTemp, Warning, TEXT("Load Failed: PlayerId Empty"));
 		return;
-	}
 
 	FInventorySaveData Data;
 
 	if (!SaveSys->GetInventory(PlayerId, Data))
 	{
-		UE_LOG(LogTemp, Warning, TEXT("Load Failed: No Saved Data %s"), *PlayerId);
-		return;
+		if (!SaveSys->LoadInventoryFromDisk(PlayerId, Data))
+			return;
 	}
 
 	Inv->LoadFromSaveData(Data);
-
-	UE_LOG(LogTemp, Warning, TEXT("Loaded Inventory: %s"), *PlayerId);
+	bInventoryLoadedFromSave = true;
 }
 
 void ALyraPlayerController::TravelConnectedLobbyToExperience(const ULyraUserFacingExperienceDefinition* UserFacingExperience)
@@ -488,6 +499,14 @@ void ALyraPlayerController::TravelConnectedLobbyToExperience(const ULyraUserFaci
 
 	if (UWorld* World = GetWorld())
 	{
+		for (FConstPlayerControllerIterator It = World->GetPlayerControllerIterator(); It; ++It)
+		{
+			if (ALyraPlayerController* LyraPC = Cast<ALyraPlayerController>(It->Get()))
+			{
+				LyraPC->SaveInventoryBeforeTravel();
+			}
+		}
+
 		World->ServerTravel(Request->ConstructTravelURL());
 	}
 }
@@ -713,34 +732,24 @@ void ALyraPlayerController::OnCameraPenetratingTarget()
 void ALyraPlayerController::OnPossess(APawn* InPawn)
 {
 	Super::OnPossess(InPawn);
-	PushLocalLobbyLoadoutToServer();
 
-#if WITH_SERVER_CODE && WITH_EDITOR
-	if (GIsEditor && (InPawn != nullptr) && (GetPawn() == InPawn))
+	PushLocalLobbyLoadoutToServer();
+	SetIsAutoRunning(false);
+
+	if (HasAuthority())
 	{
-		for (const FLyraCheatToRun& CheatRow : GetDefault<ULyraDeveloperSettings>()->CheatsToRun)
+		if (UWorld* World = GetWorld())
 		{
-			if (CheatRow.Phase == ECheatExecutionTime::OnPlayerPawnPossession)
-			{
-				ConsoleCommand(CheatRow.Cheat, /*bWriteToLog=*/ true);
-			}
+			FTimerHandle TimerHandle;
+			World->GetTimerManager().SetTimer(
+				TimerHandle,
+				this,
+				&ALyraPlayerController::LoadInventoryAfterTravel,
+				0.1f,
+				false
+			);
 		}
 	}
-#endif
-
-	SetIsAutoRunning(false);
-	
-	// =========================
-	// Inventory Load (SAFE)
-	// =========================
-	FTimerHandle TimerHandle;
-	GetWorld()->GetTimerManager().SetTimer(
-		TimerHandle,
-		this,
-		&ALyraPlayerController::LoadInventoryAfterTravel,
-		0.1f,
-		false
-	);
 }
 
 void ALyraPlayerController::SetIsAutoRunning(const bool bEnabled)
