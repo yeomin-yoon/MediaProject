@@ -24,6 +24,9 @@ public:
 	UPROPERTY(BlueprintReadWrite, Category="Inventory")
 	TObjectPtr<ULyraInventoryItemInstance> ItemInstance = nullptr;
 	
+	UPROPERTY()
+	TObjectPtr<UInventoryItemToolTipUI> CachedTooltip = nullptr;
+	
 	void SetItemInstance(ULyraInventoryItemInstance* NewItem);
 	
 	void RemoveItem();
@@ -31,7 +34,9 @@ public:
 protected:
 	UPROPERTY(BlueprintReadWrite, meta = (BindWidget))
 	TObjectPtr<UImage> TileIMG;
-    
+
+	virtual void NativeOnMouseEnter(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent) override;
+	virtual void NativeOnMouseLeave(const FPointerEvent& InMouseEvent) override;
 	virtual FReply NativeOnMouseButtonDown(
 		const FGeometry& InGeometry,
 		const FPointerEvent& InMouseEvent

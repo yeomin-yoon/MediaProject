@@ -11,6 +11,29 @@
 #include "Inventory/LyraInventoryItemInstance.h"
 #include "Inventory/LyraInventoryManagerComponent.h"
 
+void UInventoryTileUI::NativeOnMouseEnter(
+	const FGeometry& InGeometry,
+	const FPointerEvent& InMouseEvent)
+{
+	Super::NativeOnMouseEnter(InGeometry, InMouseEvent);
+
+	if (CachedTooltip)
+	{
+		CachedTooltip->SetVisibility(ESlateVisibility::Visible);
+	}
+}
+
+void UInventoryTileUI::NativeOnMouseLeave(
+	const FPointerEvent& InMouseEvent)
+{
+	Super::NativeOnMouseLeave(InMouseEvent);
+
+	if (CachedTooltip)
+	{
+		CachedTooltip->SetVisibility(ESlateVisibility::Collapsed);
+	}
+}
+
 FReply UInventoryTileUI::NativeOnMouseButtonDown(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent)
 {
 	if (InMouseEvent.IsMouseButtonDown(EKeys::LeftMouseButton))
@@ -57,21 +80,12 @@ void UInventoryTileUI::NativeOnListItemObjectSet(
 	SetItemInstance(Item);
 }
 
-void UInventoryTileUI::SetItemInstance(
-	ULyraInventoryItemInstance* NewItem)
+void UInventoryTileUI::SetItemInstance(ULyraInventoryItemInstance* NewItem)
 {
 	ItemInstance = NewItem;
 
-	// =========================
-	// 안정성 체크
-	// =========================
-
 	if (!TileIMG)
-	{
-		UE_LOG(LogTemp, Error,
-			TEXT("TileIMG Is Null"));
 		return;
-	}
 
 	if (!ItemInstance)
 	{
@@ -80,35 +94,27 @@ void UInventoryTileUI::SetItemInstance(
 	}
 
 	// =========================
-	// 아이콘 설정
+	// 아이콘
 	// =========================
-
-	UTexture2D* LoadedTexture =
-		ItemInstance->GetIconTexture();
-
-	if (LoadedTexture)
+	if (UTexture2D* LoadedTexture = ItemInstance->GetIconTexture())
 	{
-		TileIMG->SetBrushFromTexture(
-			LoadedTexture);
+		TileIMG->SetBrushFromTexture(LoadedTexture);
 	}
 
 	// =========================
-	// Tooltip 생성
+	// 툴팁 (1회 생성 + 필요 시만 갱신)
 	// =========================
-
 	if (TooltipClass)
 	{
-		UInventoryItemToolTipUI* Tooltip =
-			CreateWidget<UInventoryItemToolTipUI>(
-				GetWorld(),
-				TooltipClass);
-
-		if (Tooltip)
+		if (!CachedTooltip)
 		{
-			Tooltip->Setup(ItemInstance);
-
-			SetToolTip(Tooltip);
+			CachedTooltip = CreateWidget<UInventoryItemToolTipUI>(GetWorld(), TooltipClass);
+			SetToolTip(CachedTooltip);
+			CachedTooltip->SetVisibility(ESlateVisibility::Collapsed);
 		}
+
+		// 아이템이 바뀔 때만 Setup
+		CachedTooltip->Setup(ItemInstance);
 	}
 }
 
