@@ -5,6 +5,7 @@
 #include "Blueprint/IUserObjectListEntry.h"
 #include "InventoryTileUI.generated.h"
 
+class UInventoryItemToolTipUI;
 class ULyraInventoryManagerComponent;
 class UImage;
 class ULyraInventoryItemInstance;
@@ -50,4 +51,7 @@ protected:
 		const FDragDropEvent& InDragDropEvent,
 		UDragDropOperation* InOperation
 	) override;
+	
+	UPROPERTY(EditAnywhere)
+	TSubclassOf<UInventoryItemToolTipUI> TooltipClass;
 };

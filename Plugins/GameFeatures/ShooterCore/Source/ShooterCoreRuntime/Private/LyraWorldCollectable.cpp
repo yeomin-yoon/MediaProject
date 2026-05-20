@@ -1,7 +1,10 @@
 // Copyright Epic Games, Inc. All Rights Reserved.
 
 #include "LyraWorldCollectable.h"
+
+#include "NiagaraComponent.h"
 #include "Async/TaskGraphInterfaces.h"
+#include "Components/BoxComponent.h"
 #include "GameFramework/ProjectileMovementComponent.h"
 
 #include UE_INLINE_GENERATED_CPP_BY_NAME(LyraWorldCollectable)
@@ -10,6 +13,44 @@ struct FInteractionQuery;
 
 ALyraWorldCollectable::ALyraWorldCollectable()
 {
+	static ConstructorHelpers::FObjectFinder<UNiagaraSystem>
+		RedNSObj(
+			TEXT("/Script/Niagara.NiagaraSystem'/Game/Loot_Drop_VFX/Niagara/NS_Imortal_Loot_Drop_Red.NS_Imortal_Loot_Drop_Red'")
+		);
+
+	if (RedNSObj.Succeeded())
+	{
+		RedNS = RedNSObj.Object;
+	}
+
+	static ConstructorHelpers::FObjectFinder<UNiagaraSystem>
+		YellowNSObj(
+			TEXT("/Script/Niagara.NiagaraSystem'/Game/Loot_Drop_VFX/Niagara/NS_Imortal_Loot_Drop_Yellow.NS_Imortal_Loot_Drop_Yellow'")
+		);
+
+	if (YellowNSObj.Succeeded())
+	{
+		YellowNS = YellowNSObj.Object;
+	}
+
+	static ConstructorHelpers::FObjectFinder<UNiagaraSystem>
+		BlueNSObj(
+			TEXT("/Script/Niagara.NiagaraSystem'/Game/Loot_Drop_VFX/Niagara/NS_Imortal_Loot_Drop_Blue.NS_Imortal_Loot_Drop_Blue'")
+		);
+
+	if (BlueNSObj.Succeeded())
+	{
+		BlueNS = BlueNSObj.Object;
+	}
+	
+	BoxComp = CreateDefaultSubobject<UBoxComponent>(TEXT("BoxComponent"));
+	BoxComp->SetupAttachment(RootComponent);
+	BoxComp->SetBoxExtent(FVector(35.f, 35.f, 51.f));
+	
+	NiagaraComp = CreateDefaultSubobject<UNiagaraComponent>(TEXT("NiagaraComponent"));
+	NiagaraComp->SetupAttachment(BoxComp);
+	NiagaraComp->SetRelativeLocation(FVector(0.f, 0.f, -32.8f));
+	
 	ProjectileMovement = CreateDefaultSubobject<UProjectileMovementComponent>("ProjectileMovement");
 	
 	ProjectileMovement->InitialSpeed = 0.f;
@@ -32,7 +73,16 @@ void ALyraWorldCollectable::GatherInteractionOptions(const FInteractionQuery& In
 
 FInventoryPickup ALyraWorldCollectable::GetPickupInventory() const
 {
-	return StaticInventory;
+	FInventoryPickup Result = StaticInventory;
+
+	for (FPickupTemplate& Template : Result.Templates)
+	{
+		Template.RandomSeed = RandomSeed;
+		Template.OptionType = OptionType;
+		Template.Rarity = Rarity;
+	}
+
+	return Result;
 }
 
 void ALyraWorldCollectable::LaunchItem(FVector Velocity)
@@ -43,5 +93,26 @@ void ALyraWorldCollectable::LaunchItem(FVector Velocity)
 		ProjectileMovement->Velocity = Velocity;
 		ProjectileMovement->UpdateComponentVelocity();
 		ProjectileMovement->Activate(true);
+	}
+}
+
+void ALyraWorldCollectable::ApplyNiagaraByOption()
+{
+	if (!NiagaraComp)
+		return;
+
+	switch (OptionType)
+	{
+	case EItemOptionType::Attack:
+		NiagaraComp->SetAsset(RedNS);
+		break;
+
+	case EItemOptionType::Health:
+		NiagaraComp->SetAsset(YellowNS);
+		break;
+
+	case EItemOptionType::Stamina:
+		NiagaraComp->SetAsset(BlueNS);
+		break;
 	}
 }

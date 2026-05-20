@@ -7,6 +7,7 @@
 #include "UObject/Interface.h"
 
 #include "UObject/ObjectPtr.h"
+#include "Yeomin/Inventory/InventoryFragment_EquipEffect.h"
 #include "IPickupable.generated.h"
 
 template <typename InterfaceType> class TScriptInterface;
@@ -29,6 +30,15 @@ public:
 
 	UPROPERTY(EditAnywhere)
 	TSubclassOf<ULyraInventoryItemDefinition> ItemDef;
+	
+	UPROPERTY()
+	int32 RandomSeed = 0;
+
+	UPROPERTY()
+	EItemOptionType OptionType = EItemOptionType::Attack;
+	
+	UPROPERTY()
+	EItemRarity Rarity;
 };
 
 USTRUCT(BlueprintType)

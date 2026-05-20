@@ -35,3 +35,39 @@ UInventoryFragment_EquipEffect::RollRandomOptionType(
 		return EItemOptionType::Stamina;
 	}
 }
+
+EItemRarity UInventoryFragment_EquipEffect::EvaluateRarity(
+	float Value) const
+{
+	float Ratio =
+		(Value - MinValue)
+		/ (MaxValue - MinValue);
+
+	if (Ratio >= 0.9f)
+	{
+		return EItemRarity::Epic;
+	}
+
+	if (Ratio >= 0.7f)
+	{
+		return EItemRarity::Rare;
+	}
+
+	if (Ratio >= 0.4f)
+	{
+		return EItemRarity::Uncommon;
+	}
+
+	return EItemRarity::Common;
+}
+
+float UInventoryFragment_EquipEffect::RollRandomValueFromSeed(
+	int32 Seed) const
+{
+	FRandomStream Stream(Seed);
+
+	return Stream.FRandRange(
+		MinValue,
+		MaxValue
+	);
+}

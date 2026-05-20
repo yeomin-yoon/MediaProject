@@ -88,3 +88,48 @@ FText ULyraInventoryItemInstance::GetDisplayNameByOption() const
 		return FText::FromString(TEXT("Unknown Shard"));
 	}
 }
+
+UTexture2D* ULyraInventoryItemInstance::GetIconTexture() const
+{
+	FString Prefix;
+	int32 MaxIndex = 0;
+
+	switch (OptionType)
+	{
+	case EItemOptionType::Attack:
+		Prefix = TEXT("RedFragment_");
+		MaxIndex = 14;
+		break;
+
+	case EItemOptionType::Health:
+		Prefix = TEXT("YellowFragment_");
+		MaxIndex = 13;
+		break;
+
+	case EItemOptionType::Stamina:
+		Prefix = TEXT("BlueFragment_");
+		MaxIndex = 11;
+		break;
+
+	default:
+		return nullptr;
+	}
+
+	FRandomStream Stream(RandomSeed);
+
+	int32 IconIndex =
+		Stream.RandRange(0, MaxIndex);
+
+	FString AssetPath = FString::Printf(
+		TEXT("/Game/Loot_Drop_VFX/LootUIIMG/%s%d.%s%d"),
+		*Prefix,
+		IconIndex,
+		*Prefix,
+		IconIndex
+	);
+
+	return LoadObject<UTexture2D>(
+		nullptr,
+		*AssetPath
+	);
+}

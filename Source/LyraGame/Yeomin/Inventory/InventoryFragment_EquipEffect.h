@@ -2,18 +2,11 @@
 
 #include "CoreMinimal.h"
 #include "Inventory/LyraInventoryItemDefinition.h"
+#include "Inventory/LyraInventoryItemInstance.h"
 #include "InventoryFragment_EquipEffect.generated.h"
 
 class UGameplayEffect;
 class ULyraInventoryItemInstance;
-
-UENUM(BlueprintType)
-enum class EItemOptionType : uint8
-{
-	Attack,
-	Health,
-	Stamina
-};
 
 UCLASS()
 class LYRAGAME_API UInventoryFragment_EquipEffect
@@ -37,4 +30,8 @@ public:
 
 	EItemOptionType RollRandomOptionType(
 		const ULyraInventoryItemInstance* Instance) const;
+	
+	EItemRarity EvaluateRarity(float Value) const;
+	
+	float RollRandomValueFromSeed(int32 Seed) const;
 };

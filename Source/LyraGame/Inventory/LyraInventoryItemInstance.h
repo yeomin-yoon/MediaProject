@@ -1,18 +1,31 @@
-// Copyright Epic Games, Inc. All Rights Reserved.
-
 #pragma once
 
-#include "ActiveGameplayEffectHandle.h"
 #include "System/GameplayTagStack.h"
 #include "Templates/SubclassOf.h"
-#include "Yeomin/Inventory/InventoryFragment_EquipEffect.h"
 
 #include "LyraInventoryItemInstance.generated.h"
 
-class FLifetimeProperty;
+UENUM(BlueprintType)
+enum class EItemRarity : uint8
+{
+	Common,
+	Uncommon,
+	Rare,
+	Epic
+};
 
+UENUM(BlueprintType)
+enum class EItemOptionType : uint8
+{
+	Attack,
+	Health,
+	Stamina
+};
+
+class FLifetimeProperty;
 class ULyraInventoryItemDefinition;
 class ULyraInventoryItemFragment;
+class UTexture2D;
 struct FFrame;
 struct FGameplayTag;
 
@@ -87,7 +100,11 @@ public:
 	int32 RandomSeed = 0;
 	
 	UPROPERTY()
+	EItemRarity Rarity;
+	
+	UPROPERTY()
 	EItemOptionType OptionType = EItemOptionType::Attack;
 	
 	FText GetDisplayNameByOption() const;
+	UTexture2D* GetIconTexture() const;
 };

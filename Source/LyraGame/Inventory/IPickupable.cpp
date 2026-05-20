@@ -35,20 +35,45 @@ TScriptInterface<IPickupable> UPickupableStatics::GetFirstPickupableFromActor(AA
 	return TScriptInterface<IPickupable>();
 }
 
-void UPickupableStatics::AddPickupToInventory(ULyraInventoryManagerComponent* InventoryComponent, TScriptInterface<IPickupable> Pickup)
+void UPickupableStatics::AddPickupToInventory(
+	ULyraInventoryManagerComponent* InventoryComponent,
+	TScriptInterface<IPickupable> Pickup)
 {
-	if (InventoryComponent && Pickup)
+	if (!InventoryComponent || !Pickup)
+		return;
+
+	const FInventoryPickup& PickupInventory =
+		Pickup->GetPickupInventory();
+
+	// =========================
+	// Templates
+	// =========================
+	for (const FPickupTemplate& Template : PickupInventory.Templates)
 	{
-		const FInventoryPickup& PickupInventory = Pickup->GetPickupInventory();
+		ULyraInventoryItemInstance* NewItem =
+			InventoryComponent->AddItemDefinition(
+				Template.ItemDef,
+				Template.StackCount,
+				Template.RandomSeed,
+				Template.OptionType,
+				Template.Rarity
+			);
 
-		for (const FPickupTemplate& Template : PickupInventory.Templates)
+		if (NewItem)
 		{
-			InventoryComponent->AddItemDefinition(Template.ItemDef, Template.StackCount);
+			// 🔥 여기서 확정
+			NewItem->Rarity = Template.Rarity;
 		}
+	}
 
-		for (const FPickupInstance& Instance : PickupInventory.Instances)
-		{
-			InventoryComponent->AddItemInstance(Instance.Item);
-		}
+	// =========================
+	// Instances
+	// =========================
+	for (const FPickupInstance& Instance : PickupInventory.Instances)
+	{
+		if (!Instance.Item)
+			continue;
+		
+		InventoryComponent->AddItemInstance(Instance.Item);
 	}
 }

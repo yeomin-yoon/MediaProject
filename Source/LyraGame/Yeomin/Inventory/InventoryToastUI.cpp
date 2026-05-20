@@ -42,98 +42,71 @@ void UInventoryToastUI::HandleInventoryMessage(
 
 	if (Message.Delta <= 0)
 		return;
-
-	// =========================
-	// EquipItem만 허용
-	// =========================
-
-	FString DefName =
-		Message.Instance->GetItemDef()->GetName();
+	
+	FString DefName = Message.Instance->GetItemDef()->GetName();
 
 	if (!DefName.Contains(TEXT("EquipItem")))
 	{
 		return;
 	}
 
-	// =========================
-	// Toast 생성
-	// =========================
-
 	UItemAcquiredToastEntry* Entry =
 		NewObject<UItemAcquiredToastEntry>(this);
 
 	Entry->ItemInstance = Message.Instance;
 
-	FString ItemName;
-
-	switch (Message.Instance->OptionType)
+	// =========================
+	// OptionType (Message 기준)
+	// =========================
+	switch (Message.OptionType)
 	{
 	case EItemOptionType::Attack:
-		ItemName = TEXT("Shard of Attack");
+		Entry->ItemText = FText::FromString(TEXT("1x Shard of Attack"));
 		break;
 
 	case EItemOptionType::Health:
-		ItemName = TEXT("Shard of Vitality");
+		Entry->ItemText = FText::FromString(TEXT("1x Shard of Vitality"));
 		break;
 
 	case EItemOptionType::Stamina:
-		ItemName = TEXT("Shard of Endurance");
+		Entry->ItemText = FText::FromString(TEXT("1x Shard of Endurance"));
 		break;
 	}
 
-	Entry->ItemText = FText::FromString(
-		FString::Printf(TEXT("1x %s"), *ItemName)
-	);
+	Entry->Icon = Message.Instance->GetIconTexture();
+
+	// =========================
+	// 🔥 Rarity (Message 기준 = 핵심)
+	// =========================
+	FLinearColor Color = FLinearColor::White;
 	
-	// =========================
-	// 아이콘 생성
-	// =========================
+	UE_LOG(LogTemp, Warning, TEXT("Rarity: %d"), (int32)Message.Rarity);
+	UE_LOG(LogTemp, Warning, TEXT("Instance Rarity: %d"), (int32)Message.Instance->Rarity);
 
-	FString Prefix;
-	int32 MaxIndex = 0;
-
-	switch (Message.Instance->OptionType)
+	switch (Message.Rarity)
 	{
-	case EItemOptionType::Attack:
-		Prefix = TEXT("RedFragment_");
-		MaxIndex = 14;
+	case EItemRarity::Common:
+		Color = FLinearColor(0.65f, 0.65f, 0.65f);
 		break;
 
-	case EItemOptionType::Health:
-		Prefix = TEXT("YellowFragment_");
-		MaxIndex = 13;
+	case EItemRarity::Uncommon:
+		Color = FLinearColor(0.25f, 0.55f, 1.0f);
 		break;
 
-	case EItemOptionType::Stamina:
-		Prefix = TEXT("BlueFragment_");
-		MaxIndex = 11;
+	case EItemRarity::Rare:
+		Color = FLinearColor(0.7f, 0.35f, 1.0f);
+		break;
+
+	case EItemRarity::Epic:
+		Color = FLinearColor(1.0f, 0.82f, 0.2f);
 		break;
 	}
 
-	FRandomStream Stream(
-		Message.Instance->RandomSeed);
-
-	int32 IconIndex =
-		Stream.RandRange(0, MaxIndex);
-
-	FString AssetPath = FString::Printf(
-		TEXT("/Game/Loot_Drop_VFX/LootUIIMG/%s%d.%s%d"),
-		*Prefix,
-		IconIndex,
-		*Prefix,
-		IconIndex
-	);
-
-	Entry->Icon =
-		LoadObject<UTexture2D>(
-			nullptr,
-			*AssetPath
-		);
+	Entry->RarityColor = Color;
 
 	ToastListWidget->AddItem(Entry);
 
 	UpdateDisplayVisibility();
-
 	ResetToastTimer();
 }
 

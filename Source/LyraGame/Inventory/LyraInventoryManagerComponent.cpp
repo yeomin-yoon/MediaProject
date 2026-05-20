@@ -101,6 +101,15 @@ void FLyraInventoryList::BroadcastChangeMessage(
 	Message.NewCount = NewCount;
 	Message.Delta = NewCount - OldCount;
 
+	// =========================
+	// 🔥 FIX: Rarity / OptionType 반드시 전달
+	// =========================
+	if (Entry.Instance)
+	{
+		Message.Rarity = Entry.Instance->Rarity;
+		Message.OptionType = Entry.Instance->OptionType;
+	}
+
 	UGameplayMessageSubsystem::Get(World)
 		.BroadcastMessage(
 			TAG_Lyra_Inventory_Message_StackChanged,
@@ -110,7 +119,10 @@ void FLyraInventoryList::BroadcastChangeMessage(
 
 ULyraInventoryItemInstance* FLyraInventoryList::AddEntry(
 	TSubclassOf<ULyraInventoryItemDefinition> ItemDef,
-	int32 StackCount)
+	int32 StackCount,
+	int32 RandomSeed,
+	EItemOptionType OptionType,
+	EItemRarity Rarity)
 {
 	check(ItemDef);
 	check(OwnerComponent);
@@ -123,34 +135,14 @@ ULyraInventoryItemInstance* FLyraInventoryList::AddEntry(
 	NewEntry.Instance = NewObject<ULyraInventoryItemInstance>(Owner);
 	NewEntry.Instance->SetItemDef(ItemDef);
 
-	if (NewEntry.Instance->RandomSeed == 0)
-	{
-		NewEntry.Instance->RandomSeed = FMath::Rand();
-	}
+	// 🔥 핵심: Drop에서 만든 값 그대로 주입
+	NewEntry.Instance->RandomSeed = RandomSeed;
+	NewEntry.Instance->OptionType = OptionType;
+	NewEntry.Instance->Rarity = Rarity;
 
-	FRandomStream Stream(NewEntry.Instance->RandomSeed);
-
-	int32 RandomOption = Stream.RandRange(0, 2);
-
-	switch (RandomOption)
-	{
-	case 0:
-		NewEntry.Instance->OptionType = EItemOptionType::Attack;
-		break;
-	case 1:
-		NewEntry.Instance->OptionType = EItemOptionType::Health;
-		break;
-	case 2:
-		NewEntry.Instance->OptionType = EItemOptionType::Stamina;
-		break;
-	}
-
-	NewEntry.Instance->RandomValue = Stream.FRand();
 	NewEntry.StackCount = StackCount;
 
 	MarkItemDirty(NewEntry);
-	
-	BroadcastChangeMessage(NewEntry, 0, StackCount);
 
 	return NewEntry.Instance;
 }
@@ -164,20 +156,15 @@ void FLyraInventoryList::AddEntry(ULyraInventoryItemInstance* Instance)
 	if (!Owner || !Owner->HasAuthority())
 		return;
 
-	for (const FLyraInventoryEntry& Entry : Entries)
-	{
-		if (Entry.Instance == Instance)
-			return;
-	}
-
 	FLyraInventoryEntry& NewEntry = Entries.AddDefaulted_GetRef();
 
 	NewEntry.Instance = Instance;
 	NewEntry.StackCount = 1;
 	NewEntry.LastObservedCount = 1;
 
+	// 🔥 여기서 굳이 복사할 필요 없음 (Instance가 이미 원본)
 	MarkItemDirty(NewEntry);
-	
+
 	BroadcastChangeMessage(NewEntry, 0, 1);
 }
 
@@ -266,30 +253,47 @@ bool ULyraInventoryManagerComponent::CanAddItemDefinition(TSubclassOf<ULyraInven
 	return true;
 }
 
-ULyraInventoryItemInstance* ULyraInventoryManagerComponent::AddItemDefinition(TSubclassOf<ULyraInventoryItemDefinition> ItemDef, int32 StackCount)
+ULyraInventoryItemInstance* ULyraInventoryManagerComponent::AddItemDefinition(
+	TSubclassOf<ULyraInventoryItemDefinition> ItemDef,
+	int32 StackCount)
 {
-	ULyraInventoryItemInstance* Result = nullptr;
-	if (ItemDef != nullptr)
-	{
-		Result = InventoryList.AddEntry(ItemDef, StackCount);
-		
-		if (IsUsingRegisteredSubObjectList() && IsReadyForReplication() && Result)
-		{
-			AddReplicatedSubObject(Result);
-		}
-	}
+	return AddItemDefinition(
+		ItemDef,
+		StackCount,
+		0,
+		EItemOptionType::Attack,
+		EItemRarity::Common
+	);
+}
+ULyraInventoryItemInstance* ULyraInventoryManagerComponent::AddItemDefinition(
+	TSubclassOf<ULyraInventoryItemDefinition> ItemDef,
+	int32 StackCount,
+	int32 RandomSeed,
+	EItemOptionType OptionType,
+	EItemRarity Rarity)
+{
+	if (!ItemDef)
+		return nullptr;
+	
+	ULyraInventoryItemInstance* Result =
+		InventoryList.AddEntry(ItemDef, StackCount, RandomSeed, OptionType, Rarity);
+
+	if (!Result)
+		return nullptr;
+
+	BroadcastItemAdded(Result, StackCount);
+
 	return Result;
 }
 
 void ULyraInventoryManagerComponent::AddItemInstance(ULyraInventoryItemInstance* ItemInstance)
 {
 	if (!ItemInstance)
-	{
 		return;
-	}
-	
+
 	InventoryList.AddEntry(ItemInstance);
-	if (IsUsingRegisteredSubObjectList() && IsReadyForReplication() && ItemInstance)
+
+	if (IsUsingRegisteredSubObjectList() && IsReadyForReplication())
 	{
 		AddReplicatedSubObject(ItemInstance);
 	}
@@ -833,6 +837,35 @@ void ULyraInventoryManagerComponent::LoadFromSaveData(
 			}
 		}
 	}
+}
+
+void ULyraInventoryManagerComponent::BroadcastItemAdded(
+	ULyraInventoryItemInstance* Instance,
+	int32 Count)
+{
+	if (!Instance)
+		return;
+
+	UWorld* World = GetWorld();
+	if (!World)
+		return;
+
+	FLyraInventoryChangeMessage Message;
+
+	Message.InventoryOwner = this;
+	Message.Instance = Instance;
+	Message.NewCount = Count;
+	Message.Delta = Count;
+
+	// 🔥 핵심: 여기서만 확정값 전달
+	Message.Rarity = Instance->Rarity;
+	Message.OptionType = Instance->OptionType;
+
+	UGameplayMessageSubsystem::Get(World)
+		.BroadcastMessage(
+			TAG_Lyra_Inventory_Message_StackChanged,
+			Message
+		);
 }
 
 //////////////////////////////////////////////////////////////////////

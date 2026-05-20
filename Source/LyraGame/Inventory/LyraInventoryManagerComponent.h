@@ -38,6 +38,12 @@ struct FLyraInventoryChangeMessage
 
 	UPROPERTY(BlueprintReadOnly, Category=Inventory)
 	int32 Delta = 0;
+	
+	UPROPERTY()
+	EItemRarity Rarity;
+
+	UPROPERTY()
+	EItemOptionType OptionType;
 };
 
 /** A single entry in an inventory */
@@ -95,8 +101,8 @@ public:
 	{
 		return FFastArraySerializer::FastArrayDeltaSerialize<FLyraInventoryEntry, FLyraInventoryList>(Entries, DeltaParms, *this);
 	}
-
-	ULyraInventoryItemInstance* AddEntry(TSubclassOf<ULyraInventoryItemDefinition> ItemClass, int32 StackCount);
+	
+	ULyraInventoryItemInstance* AddEntry(TSubclassOf<ULyraInventoryItemDefinition> ItemClass, int32 StackCount, int32 RandomSeed, EItemOptionType OptionType, EItemRarity Rarity);
 	void AddEntry(ULyraInventoryItemInstance* Instance);
 
 	void RemoveEntry(ULyraInventoryItemInstance* Instance);
@@ -148,6 +154,8 @@ public:
 	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category=Inventory)
 	ULyraInventoryItemInstance* AddItemDefinition(TSubclassOf<ULyraInventoryItemDefinition> ItemDef, int32 StackCount = 1);
 
+	ULyraInventoryItemInstance* AddItemDefinition(TSubclassOf<ULyraInventoryItemDefinition> ItemDef, int32 StackCount, int32 RandomSeed, EItemOptionType OptionType, EItemRarity Rarity);
+	
 	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category=Inventory)
 	void AddItemInstance(ULyraInventoryItemInstance* ItemInstance);
 
@@ -167,6 +175,7 @@ public:
 	void RemoveEquipEffect(UAbilitySystemComponent* ASC, ULyraInventoryItemInstance* Item);
 	FInventorySaveData MakeSaveData() const;
 	void LoadFromSaveData(const FInventorySaveData& SaveData);
+	void BroadcastItemAdded(ULyraInventoryItemInstance* Instance, int32 Count);
 
 	UFUNCTION(BlueprintCallable, Category=Inventory, BlueprintPure=false)
 	TArray<ULyraInventoryItemInstance*> GetAllItems() const;

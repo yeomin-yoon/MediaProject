@@ -6,6 +6,7 @@
 #include "Components/ActorComponent.h"
 #include "ItemDropComponent.generated.h"
 
+class UNiagaraSystem;
 class ALyraWorldCollectable;
 
 UCLASS(ClassGroup=(Custom), meta=(BlueprintSpawnableComponent))
@@ -21,7 +22,7 @@ protected:
 	
 	UFUNCTION(BlueprintCallable)
 	void DropItems();
-	
+
 private:
 	void SpawnOneItem();
 	

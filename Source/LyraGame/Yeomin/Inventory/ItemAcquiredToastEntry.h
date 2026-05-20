@@ -23,4 +23,7 @@ public:
 
 	UPROPERTY()
 	TObjectPtr<ULyraInventoryItemInstance> ItemInstance;
+	
+	UPROPERTY()
+	FLinearColor RarityColor;
 };

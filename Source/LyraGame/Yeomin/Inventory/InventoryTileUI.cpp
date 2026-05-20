@@ -3,6 +3,7 @@
 
 #include "InventoryTileUI.h"
 #include "InventoryDragDrop.h"
+#include "InventoryItemToolTipUI.h"
 #include "Components/Image.h"
 #include "Inventory/LyraInventoryItemInstance.h"
 #include "Inventory/LyraInventoryManagerComponent.h"
@@ -85,68 +86,38 @@ void UInventoryTileUI::SetItemInstance(
 		TileIMG->SetBrushFromTexture(nullptr);
 		return;
 	}
-	
-	// =========================
-	// 옵션 타입별 설정
-	// =========================
-
-	FString Prefix;
-	int32 MaxIndex = 0;
-
-	switch (ItemInstance->OptionType)
-	{
-	case EItemOptionType::Attack:
-		Prefix = TEXT("RedFragment_");
-		MaxIndex = 14;
-		break;
-
-	case EItemOptionType::Health:
-		Prefix = TEXT("YellowFragment_");
-		MaxIndex = 13;
-		break;
-
-	case EItemOptionType::Stamina:
-		Prefix = TEXT("BlueFragment_");
-		MaxIndex = 11;
-		break;
-
-	default:
-		return;
-	}
 
 	// =========================
-	// Seed 기반 랜덤
+	// 아이콘 설정
 	// =========================
-
-	FRandomStream Stream(
-		ItemInstance->RandomSeed);
-
-	int32 IconIndex =
-		Stream.RandRange(0, MaxIndex);
-
-	FString AssetPath = FString::Printf(
-		TEXT("/Game/Loot_Drop_VFX/LootUIIMG/%s%d.%s%d"),
-		*Prefix,
-		IconIndex,
-		*Prefix,
-		IconIndex
-	);
 
 	UTexture2D* LoadedTexture =
-		LoadObject<UTexture2D>(
-			nullptr,
-			*AssetPath
-		);
+		ItemInstance->GetIconTexture();
 
-	if (!LoadedTexture)
+	if (LoadedTexture)
 	{
-		UE_LOG(LogTemp, Error,
-			TEXT("Texture Load Failed"));
-		return;
+		TileIMG->SetBrushFromTexture(
+			LoadedTexture);
 	}
 
-	TileIMG->SetBrushFromTexture(
-		LoadedTexture);
+	// =========================
+	// Tooltip 생성
+	// =========================
+
+	if (TooltipClass)
+	{
+		UInventoryItemToolTipUI* Tooltip =
+			CreateWidget<UInventoryItemToolTipUI>(
+				GetWorld(),
+				TooltipClass);
+
+		if (Tooltip)
+		{
+			Tooltip->Setup(ItemInstance);
+
+			SetToolTip(Tooltip);
+		}
+	}
 }
 
 void UInventoryTileUI::RemoveItem()

@@ -6,9 +6,12 @@
 #include "Interaction/IInteractableTarget.h"
 #include "Interaction/InteractionOption.h"
 #include "Inventory/IPickupable.h"
-
+#include "NiagaraSystem.h"
 #include "LyraWorldCollectable.generated.h"
 
+class UBoxComponent;
+class UNiagaraComponent;
+enum class EItemOptionType : uint8;
 class UObject;
 struct FInteractionQuery;
 
@@ -32,13 +35,39 @@ public:
 protected:
 	UPROPERTY(EditAnywhere)
 	FInteractionOption Option;
+	
+	UPROPERTY(EditAnywhere)
+	TObjectPtr<UBoxComponent> BoxComp;
+	
+	UPROPERTY(EditAnywhere)
+	TObjectPtr<UNiagaraComponent> NiagaraComp;
 
+	UPROPERTY()
+	TObjectPtr<UNiagaraSystem> RedNS;
+
+	UPROPERTY()
+	TObjectPtr<UNiagaraSystem> YellowNS;
+
+	UPROPERTY()
+	TObjectPtr<UNiagaraSystem> BlueNS;
+	
+public:
 	UPROPERTY(EditAnywhere)
 	FInventoryPickup StaticInventory;
 	
-public:
 	void LaunchItem(FVector Velocity);
 
 	UPROPERTY(EditAnywhere)
 	TObjectPtr<UProjectileMovementComponent> ProjectileMovement;
+	
+	UPROPERTY(BlueprintReadOnly)
+	EItemOptionType OptionType;
+
+	UPROPERTY(BlueprintReadOnly)
+	int32 RandomSeed;
+	
+	UPROPERTY(BlueprintReadOnly)
+	EItemRarity Rarity;
+	
+	void ApplyNiagaraByOption();
 };

@@ -1,5 +1,8 @@
 ﻿#include "ItemDropComponent.h"
+
+#include "InventoryFragment_EquipEffect.h"
 #include "LyraWorldCollectable.h"
+#include "Inventory/LyraInventoryItemDefinition.h"
 #include "Engine/World.h"
 #include "TimerManager.h"
 
@@ -55,28 +58,82 @@ void UItemDropComponent::SpawnOneItem()
 	SpawnParams.SpawnCollisionHandlingOverride =
 		ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
 
-	ALyraWorldCollectable* Item = World->SpawnActor<ALyraWorldCollectable>(
-		ItemClass,
-		SpawnLocation,
-		FRotator::ZeroRotator,
-		SpawnParams
-	);
-
-	if (Item)
-	{
-		// ===== 분수 Velocity 계산 =====
-		float Angle = FMath::RandRange(0.f, 2 * PI);
-		float Radius = FMath::RandRange(150.f, 300.f);   // XY 퍼짐
-		float UpVelocity = FMath::RandRange(800.f, 950.f); // 위로 쏘는 힘
-
-		FVector Velocity = FVector(
-			FMath::Cos(Angle) * Radius,
-			FMath::Sin(Angle) * Radius,
-			UpVelocity
+	ALyraWorldCollectable* Item =
+		World->SpawnActor<ALyraWorldCollectable>(
+			ItemClass,
+			SpawnLocation,
+			FRotator::ZeroRotator,
+			SpawnParams
 		);
 
-		Item->LaunchItem(Velocity);
+	if (!Item)
+		return;
+
+	// =========================
+	// 1. Seed (절대 고정값)
+	// =========================
+	Item->RandomSeed = FMath::Rand();
+
+	FRandomStream Stream(Item->RandomSeed);
+
+	// =========================
+	// 2. OptionType (Drop에서 1회 결정)
+	// =========================
+	switch (Stream.RandRange(0, 2))
+	{
+	case 0: Item->OptionType = EItemOptionType::Attack; break;
+	case 1: Item->OptionType = EItemOptionType::Health; break;
+	case 2: Item->OptionType = EItemOptionType::Stamina; break;
 	}
+
+	// =========================
+	// 3. Rarity (Drop에서 1회 결정)
+	// =========================
+	const ULyraInventoryItemDefinition* DefCDO =
+		GetDefault<ULyraInventoryItemDefinition>(
+			Item->StaticInventory.Templates[0].ItemDef);
+
+	if (DefCDO)
+	{
+		const UInventoryFragment_EquipEffect* Frag =
+			Cast<UInventoryFragment_EquipEffect>(
+				DefCDO->FindFragmentByClass(
+					UInventoryFragment_EquipEffect::StaticClass()));
+
+		if (Frag)
+		{
+			float Value = Frag->RollRandomValueFromSeed(Item->RandomSeed);
+			Item->Rarity = Frag->EvaluateRarity(Value);
+		}
+	}
+
+	// =========================
+	// 4. 🔥 핵심: PickupTemplate에도 그대로 고정
+	// =========================
+	Item->StaticInventory.Templates[0].RandomSeed = Item->RandomSeed;
+	Item->StaticInventory.Templates[0].OptionType = Item->OptionType;
+	Item->StaticInventory.Templates[0].Rarity = Item->Rarity;
+
+	// =========================
+	// 5. FX
+	// =========================
+	Item->ApplyNiagaraByOption();
+
+	// =========================
+	// 6. Launch
+	// =========================
+	float Angle = FMath::RandRange(0.f, 2 * PI);
+
+	float Radius = FMath::RandRange(150.f, 300.f);
+	float UpVelocity = FMath::RandRange(800.f, 950.f);
+
+	FVector Velocity(
+		FMath::Cos(Angle) * Radius,
+		FMath::Sin(Angle) * Radius,
+		UpVelocity
+	);
+
+	Item->LaunchItem(Velocity);
 
 	CurrentDropCount++;
 }
