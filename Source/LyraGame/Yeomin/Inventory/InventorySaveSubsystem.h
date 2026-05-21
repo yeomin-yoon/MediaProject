@@ -7,9 +7,6 @@
 
 class ULyraInventoryItemDefinition;
 
-// ============================
-// 개별 아이템 저장 데이터
-// ============================
 USTRUCT(BlueprintType)
 struct FInventoryEntrySave
 {
@@ -34,9 +31,6 @@ struct FInventoryEntrySave
 	EItemRarity Rarity = EItemRarity::Common;
 };
 
-// ============================
-// 전체 인벤토리 저장 데이터
-// ============================
 USTRUCT(BlueprintType)
 struct FInventorySaveData
 {
@@ -54,36 +48,26 @@ class LYRAGAME_API UInventorySaveSubsystem
 
 public:
 	virtual void Initialize(FSubsystemCollectionBase& Collection) override;
+	void TryInitializeLoad();
 
-	void SetInventory(
-		const FString& PlayerId,
-		const FInventorySaveData& Data);
-
-	bool GetInventory(
-		const FString& PlayerId,
-		FInventorySaveData& OutData) const;
-
-	bool HasInventory(
-		const FString& PlayerId) const;
-
-	void ClearInventory(
-		const FString& PlayerId);
-
+	void SetInventory(const FString& PlayerId, const FInventorySaveData& Data);
+	bool GetInventory(const FString& PlayerId, FInventorySaveData& OutData) const;
+	bool HasInventory(const FString& PlayerId) const;
+	void ClearInventory(const FString& PlayerId);
 	void ClearAllInventories();
 
-	bool SaveInventoryToDisk(
-		const FString& PlayerId);
-
-	bool LoadInventoryFromDisk(
-		const FString& PlayerId,
-		FInventorySaveData& OutData);
-
+	bool SaveInventoryToDisk(const FString& PlayerId);
+	bool LoadInventoryFromDisk(const FString& PlayerId, FInventorySaveData& OutData);
 	bool SaveAllToDisk();
-
 	bool LoadAllFromDisk();
 
+	void RequestSave();
+
 private:
-	static FString MakeSaveSlotName();
+	void FlushSave();
+	bool bInventoryDirty = false;
+	FTimerHandle SaveTimerHandle;
+	FString GetSaveSlotName() const;
 
 private:
 	UPROPERTY()
@@ -94,4 +78,6 @@ private:
 
 	UPROPERTY()
 	int32 UserIndex = 0;
+	
+	bool bHasInitializedLoad = false;
 };

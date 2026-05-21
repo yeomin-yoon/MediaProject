@@ -12,7 +12,9 @@
 #include "NativeGameplayTags.h"
 #include "GameFramework/PlayerState.h"
 #include "Net/UnrealNetwork.h"
+#include "Player/LyraPlayerController.h"
 #include "Yeomin/Inventory/InventoryFragment_EquipEffect.h"
+#include "Yeomin/Inventory/InventoryLogChannels.h"
 #include "Yeomin/Inventory/InventorySaveSubsystem.h"
 
 #include UE_INLINE_GENERATED_CPP_BY_NAME(LyraInventoryManagerComponent)
@@ -102,7 +104,7 @@ void FLyraInventoryList::BroadcastChangeMessage(
 	Message.Delta = NewCount - OldCount;
 
 	// =========================
-	// 🔥 FIX: Rarity / OptionType 반드시 전달
+	// Rarity / OptionType 반드시 전달
 	// =========================
 	if (Entry.Instance)
 	{
@@ -135,7 +137,7 @@ ULyraInventoryItemInstance* FLyraInventoryList::AddEntry(
 	NewEntry.Instance = NewObject<ULyraInventoryItemInstance>(Owner);
 	NewEntry.Instance->SetItemDef(ItemDef);
 
-	// 🔥 핵심: Drop에서 만든 값 그대로 주입
+	// Drop에서 만든 값 그대로 주입
 	NewEntry.Instance->RandomSeed = RandomSeed;
 	NewEntry.Instance->OptionType = OptionType;
 	NewEntry.Instance->Rarity = Rarity;
@@ -161,8 +163,7 @@ void FLyraInventoryList::AddEntry(ULyraInventoryItemInstance* Instance)
 	NewEntry.Instance = Instance;
 	NewEntry.StackCount = 1;
 	NewEntry.LastObservedCount = 1;
-
-	// 🔥 여기서 굳이 복사할 필요 없음 (Instance가 이미 원본)
+	
 	MarkItemDirty(NewEntry);
 
 	BroadcastChangeMessage(NewEntry, 0, 1);
@@ -307,25 +308,34 @@ void ULyraInventoryManagerComponent::RemoveItemInstance(ULyraInventoryItemInstan
 	{
 		RemoveReplicatedSubObject(ItemInstance);
 	}
-	
+
 	OnInventoryChanged.Broadcast();
 }
 
-void ULyraInventoryManagerComponent::RemoveItemFromAnywhere(ULyraInventoryItemInstance* Item)
+void ULyraInventoryManagerComponent::RemoveItemFromAnywhere(
+	ULyraInventoryItemInstance* Item)
 {
 	if (!Item)
+	{
 		return;
+	}
 
 	// =========================
-	// 1. Equip 슬롯에서 제거
+	// 1. Equip 슬롯 제거
 	// =========================
+
 	for (int32 i = 0; i < EquipSlots.Num(); i++)
 	{
 		if (EquipSlots[i] == Item)
 		{
-			APlayerController* PC = Cast<APlayerController>(GetOwner());
-			APlayerState* PS = PC ? PC->GetPlayerState<APlayerState>() : nullptr;
-			UAbilitySystemComponent* ASC = PS ? PS->FindComponentByClass<UAbilitySystemComponent>() : nullptr;
+			APlayerController* PC =
+				Cast<APlayerController>(GetOwner());
+
+			APlayerState* PS =
+				PC ? PC->GetPlayerState<APlayerState>() : nullptr;
+
+			UAbilitySystemComponent* ASC =
+				PS ? PS->FindComponentByClass<UAbilitySystemComponent>() : nullptr;
 
 			if (ASC)
 			{
@@ -337,11 +347,12 @@ void ULyraInventoryManagerComponent::RemoveItemFromAnywhere(ULyraInventoryItemIn
 	}
 
 	// =========================
-	// 2. Inventory에서 제거
+	// 2. Inventory 제거
 	// =========================
+
 	InventoryList.RemoveEntry(Item);
 
-	if (Item && IsUsingRegisteredSubObjectList())
+	if (IsUsingRegisteredSubObjectList())
 	{
 		RemoveReplicatedSubObject(Item);
 	}
@@ -349,8 +360,15 @@ void ULyraInventoryManagerComponent::RemoveItemFromAnywhere(ULyraInventoryItemIn
 	// =========================
 	// 3. UI 이벤트
 	// =========================
+
 	OnEquipChanged.Broadcast();
 	OnInventoryChanged.Broadcast();
+
+	// =========================
+	// 4. Save
+	// =========================
+	
+	SaveInventory();
 }
 
 void ULyraInventoryManagerComponent::EquipSwap(int32 SlotIndex, ULyraInventoryItemInstance* NewItem)
@@ -560,6 +578,12 @@ void ULyraInventoryManagerComponent::EquipFromInventory(
 	// 5. UI 갱신 트리거
 	// =========================
 	OnEquipChanged.Broadcast();
+	
+	// =========================
+	// 4. Save
+	// =========================
+	
+	SaveInventory();
 }
 
 void ULyraInventoryManagerComponent::SwapEquipSlots(int32 A, int32 B)
@@ -621,6 +645,12 @@ void ULyraInventoryManagerComponent::RemoveFromEquipAndReturnToInventory(
 	}
 
 	OnEquipChanged.Broadcast();
+	
+	// =========================
+	// 4. Save
+	// =========================
+	
+	SaveInventory();
 }
 
 void ULyraInventoryManagerComponent::ApplyEquipEffect(
@@ -750,31 +780,18 @@ FInventorySaveData ULyraInventoryManagerComponent::MakeSaveData() const
 
 	for (const FLyraInventoryEntry& Entry : InventoryList.Entries)
 	{
-		if (!Entry.Instance)
-			continue;
+		if (!Entry.Instance) continue;
 
 		FInventoryEntrySave Data;
-
 		Data.ItemDef = Entry.Instance->GetItemDef();
 		Data.StackCount = Entry.StackCount;
-		Data.EquipSlotIndex = INDEX_NONE;
-
-		// =========================
-		// 랜덤 데이터 저장
-		// =========================
 
 		Data.RandomSeed = Entry.Instance->RandomSeed;
+		Data.OptionType = Entry.Instance->OptionType;
+		Data.Rarity = Entry.Instance->Rarity;
 
-		Data.OptionType =
-			Entry.Instance->OptionType;
-
-		Data.Rarity =
-			Entry.Instance->Rarity;
-
-		// =========================
-		// 장착 슬롯 저장
-		// =========================
-
+		// Equip 슬롯
+		Data.EquipSlotIndex = INDEX_NONE;
 		for (int32 i = 0; i < EquipSlots.Num(); ++i)
 		{
 			if (EquipSlots[i] == Entry.Instance)
@@ -793,27 +810,11 @@ FInventorySaveData ULyraInventoryManagerComponent::MakeSaveData() const
 void ULyraInventoryManagerComponent::LoadFromSaveData(
 	const FInventorySaveData& SaveData)
 {
-	AActor* Owner = GetOwner();
+	APlayerController* PC = Cast<APlayerController>(GetOwner());
+	APlayerState* PS = PC ? PC->GetPlayerState<APlayerState>() : nullptr;
+	UAbilitySystemComponent* ASC = PS ? PS->FindComponentByClass<UAbilitySystemComponent>() : nullptr;
 
-	if (!Owner)
-		return;
-
-	APlayerController* PC =
-		Cast<APlayerController>(Owner);
-
-	APlayerState* PS =
-		PC ? PC->GetPlayerState<APlayerState>() : nullptr;
-
-	if (!PS)
-		return;
-
-	UAbilitySystemComponent* ASC =
-		PS->FindComponentByClass<UAbilitySystemComponent>();
-
-	// =========================
-	// 기존 GE 제거
-	// =========================
-
+	// 1. 기존 GE 제거
 	if (ASC)
 	{
 		for (auto It = ActiveGEMap.CreateIterator(); It; ++It)
@@ -825,31 +826,23 @@ void ULyraInventoryManagerComponent::LoadFromSaveData(
 		}
 	}
 
-	// =========================
-	// 기존 데이터 초기화
-	// =========================
-
 	ActiveGEMap.Empty();
 
 	InventoryList.Entries.Empty();
 	InventoryList.MarkArrayDirty();
 
-	EquipSlots.Empty();
 	EquipSlots.SetNum(3);
 
-	TMap<int32, ULyraInventoryItemInstance*> IndexToInstance;
-
 	// =========================
-	// 아이템 생성
+	// Instance 직접 매핑
 	// =========================
+	TArray<ULyraInventoryItemInstance*> CreatedItems;
+	CreatedItems.Reserve(SaveData.Items.Num());
 
-	for (int32 i = 0; i < SaveData.Items.Num(); ++i)
+	// 1. 아이템 생성
+	for (const FInventoryEntrySave& Data : SaveData.Items)
 	{
-		const FInventoryEntrySave& Data =
-			SaveData.Items[i];
-
-		if (!Data.ItemDef)
-			continue;
+		if (!Data.ItemDef) continue;
 
 		ULyraInventoryItemInstance* NewItem =
 			AddItemDefinition(
@@ -857,32 +850,31 @@ void ULyraInventoryManagerComponent::LoadFromSaveData(
 				Data.StackCount,
 				Data.RandomSeed,
 				Data.OptionType,
-				Data.Rarity);
+				Data.Rarity
+			);
 
-		if (!NewItem)
-			continue;
-
-		IndexToInstance.Add(i, NewItem);
+		if (NewItem)
+		{
+			CreatedItems.Add(NewItem);
+		}
 	}
 
-	// =========================
-	// 장착 복구
-	// =========================
-
+	// 2. 장착 복구
 	for (int32 i = 0; i < SaveData.Items.Num(); ++i)
 	{
-		const FInventoryEntrySave& Data =
-			SaveData.Items[i];
+		const FInventoryEntrySave& Data = SaveData.Items[i];
 
-		if (Data.EquipSlotIndex != INDEX_NONE)
+		if (Data.EquipSlotIndex == INDEX_NONE)
+			continue;
+
+		if (!CreatedItems.IsValidIndex(i))
+			continue;
+
+		ULyraInventoryItemInstance* Item = CreatedItems[i];
+
+		if (Item)
 		{
-			if (ULyraInventoryItemInstance** Found =
-				IndexToInstance.Find(i))
-			{
-				EquipFromInventory(
-					Data.EquipSlotIndex,
-					*Found);
-			}
+			EquipFromInventory(Data.EquipSlotIndex, Item);
 		}
 	}
 
@@ -916,6 +908,60 @@ void ULyraInventoryManagerComponent::BroadcastItemAdded(
 			TAG_Lyra_Inventory_Message_StackChanged,
 			Message
 		);
+}
+
+void ULyraInventoryManagerComponent::SaveInventory()
+{
+	ALyraPlayerController* PC =
+		Cast<ALyraPlayerController>(GetOwner());
+
+	if (!PC)
+	{
+		return;
+	}
+
+	UWorld* World = GetWorld();
+
+	if (!World)
+	{
+		return;
+	}
+
+	UGameInstance* GI = World->GetGameInstance();
+
+	if (!GI)
+	{
+		return;
+	}
+
+	UInventorySaveSubsystem* SaveSys =
+		GI->GetSubsystem<UInventorySaveSubsystem>();
+
+	if (!SaveSys)
+	{
+		return;
+	}
+
+	const FString PlayerId =
+		PC->GetInventorySavePlayerId();
+
+	if (PlayerId.IsEmpty())
+	{
+		UE_LOG(LogInventorySave, Warning,
+			TEXT("Save Failed - Empty PlayerId"));
+
+		return;
+	}
+
+	const FInventorySaveData SaveData =
+		MakeSaveData();
+
+	SaveSys->SetInventory(PlayerId, SaveData);
+
+	SaveSys->RequestSave();
+
+	UE_LOG(LogInventorySave, Log,
+		TEXT("Inventory Saved"));
 }
 
 //////////////////////////////////////////////////////////////////////

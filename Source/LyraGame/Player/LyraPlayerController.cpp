@@ -37,6 +37,8 @@
 
 #include "Blueprint/UserWidget.h"
 #include "Inventory/LyraInventoryManagerComponent.h"
+#include "System/LyraGameInstance.h"
+#include "Yeomin/Inventory/InventoryLogChannels.h"
 #include "Yeomin/Inventory/InventorySaveSubsystem.h"
 
 #include UE_INLINE_GENERATED_CPP_BY_NAME(LyraPlayerController)
@@ -101,15 +103,18 @@ void ALyraPlayerController::BeginPlay()
 			Widget->AddToViewport(9999);
 		}
 	}
+	
+	if (UGameInstance* GI = GetGameInstance())
+	{
+		if (UInventorySaveSubsystem* SaveSys = GI->GetSubsystem<UInventorySaveSubsystem>())
+		{
+			SaveSys->TryInitializeLoad();
+		}
+	}
 }
 
 void ALyraPlayerController::EndPlay(const EEndPlayReason::Type EndPlayReason)
-{
-	if (HasAuthority())
-	{
-		SaveInventoryBeforeTravel();
-	}
-	
+{	
 	Super::EndPlay(EndPlayReason);
 }
 
@@ -390,24 +395,26 @@ void ALyraPlayerController::MarkLobbyReadyAndMaybeTravelToExperience(const ULyra
 
 FString ALyraPlayerController::GetInventorySavePlayerId() const
 {
-	const APlayerState* PS = GetPlayerState<APlayerState>();
-	if (!PS)
+	UWorld* World = GetWorld();
+
+	if (!World)
 	{
-		return FString();
+		return TEXT("INVALID_WORLD");
 	}
 
-	const FUniqueNetIdRepl& UniqueId = PS->GetUniqueId();
-	if (UniqueId.IsValid())
-	{
-		const FString UniqueIdString = UniqueId.ToString();
+	ULyraGameInstance* GI =
+		Cast<ULyraGameInstance>(World->GetGameInstance());
 
-		if (!UniqueIdString.IsEmpty())
-		{
-			return UniqueIdString;
-		}
+	if (!GI)
+	{
+		return TEXT("INVALID_GI");
 	}
 
-	return FString::Printf(TEXT("PlayerId_%d"), PS->GetPlayerId());
+	// ============================================================
+	// 핵심
+	// ============================================================
+
+	return GI->GetPersistentPlayerId();
 }
 
 // LyraPlayerController.cpp
@@ -424,7 +431,7 @@ void ALyraPlayerController::SaveInventoryBeforeTravel()
 		return;
 
 	ULyraInventoryManagerComponent* Inv =
-		FindComponentByClass<ULyraInventoryManagerComponent>();
+	FindComponentByClass<ULyraInventoryManagerComponent>();
 
 	if (!Inv)
 		return;
@@ -455,7 +462,7 @@ void ALyraPlayerController::LoadInventoryAfterTravel()
 		return;
 
 	ULyraInventoryManagerComponent* Inv =
-		FindComponentByClass<ULyraInventoryManagerComponent>();
+	FindComponentByClass<ULyraInventoryManagerComponent>();
 
 	if (!Inv)
 		return;
@@ -479,7 +486,8 @@ void ALyraPlayerController::LoadInventoryAfterTravel()
 
 void ALyraPlayerController::TravelConnectedLobbyToExperience(const ULyraUserFacingExperienceDefinition* UserFacingExperience)
 {
-	UE_LOG(LogTemp, Warning, TEXT("=== ServerTravel START ==="));
+	UE_LOG(LogInventorySave, Log, TEXT("ServerTravel Start"));
+	
 	if (!HasAuthority() || !UserFacingExperience)
 	{
 		return;
@@ -738,17 +746,7 @@ void ALyraPlayerController::OnPossess(APawn* InPawn)
 
 	if (HasAuthority())
 	{
-		if (UWorld* World = GetWorld())
-		{
-			FTimerHandle TimerHandle;
-			World->GetTimerManager().SetTimer(
-				TimerHandle,
-				this,
-				&ALyraPlayerController::LoadInventoryAfterTravel,
-				0.1f,
-				false
-			);
-		}
+		LoadInventoryAfterTravel();
 	}
 }
 

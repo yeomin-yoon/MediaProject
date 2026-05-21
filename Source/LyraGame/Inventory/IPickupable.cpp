@@ -5,6 +5,7 @@
 #include "LyraInventoryItemDefinition.h"
 #include "GameFramework/Actor.h"
 #include "LyraInventoryManagerComponent.h"
+#include "Player/LyraPlayerController.h"
 #include "UObject/ScriptInterface.h"
 
 #include UE_INLINE_GENERATED_CPP_BY_NAME(IPickupable)
@@ -41,36 +42,52 @@ void UPickupableStatics::AddPickupToInventory(
 	TScriptInterface<IPickupable> Pickup)
 {
 	if (!InventoryComponent || !Pickup)
+	{
 		return;
+	}
 
 	const FInventoryPickup& PickupInventory =
 		Pickup->GetPickupInventory();
 
-	// =========================
-	// Templates
-	// =========================
-	for (const FPickupTemplate& Template : PickupInventory.Templates)
+	// ============================================================
+	// Template Items
+	// ============================================================
+
+	for (const FPickupTemplate& Template :
+		PickupInventory.Templates)
 	{
 		if (!Template.ItemDef)
+		{
 			continue;
+		}
 
 		InventoryComponent->AddItemDefinition(
 			Template.ItemDef,
 			Template.StackCount,
 			Template.RandomSeed,
 			Template.OptionType,
-			Template.Rarity
-		);
+			Template.Rarity);
 	}
 
-	// =========================
-	// Instances
-	// =========================
-	for (const FPickupInstance& Instance : PickupInventory.Instances)
+	// ============================================================
+	// Instance Items
+	// ============================================================
+
+	for (const FPickupInstance& Instance :
+		PickupInventory.Instances)
 	{
 		if (!Instance.Item)
+		{
 			continue;
-		
-		InventoryComponent->AddItemInstance(Instance.Item);
+		}
+
+		InventoryComponent->AddItemInstance(
+			Instance.Item);
 	}
+
+	// ============================================================
+	// Save
+	// ============================================================
+
+	InventoryComponent->SaveInventory();
 }

@@ -195,4 +195,6 @@ public:
 	
 	UPROPERTY(Replicated)
 	FLyraInventoryList InventoryList;
+	
+	void SaveInventory();
 };

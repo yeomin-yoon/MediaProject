@@ -149,8 +149,6 @@ private:
 public:
 	void SaveInventoryBeforeTravel();
 	void LoadInventoryAfterTravel();
-
-private:
 	FString GetInventorySavePlayerId() const;
 
 protected:

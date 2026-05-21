@@ -17,6 +17,10 @@
 #include "Misc/FileHelper.h"
 #endif // UE_WITH_DTLS
 
+#include "Kismet/GameplayStatics.h"
+#include "Yeomin/Inventory/InventoryLogChannels.h"
+#include "Yeomin/Inventory/PersistentIdSaveGame.h"
+
 #include UE_INLINE_GENERATED_CPP_BY_NAME(LyraGameInstance)
 
 namespace Lyra
@@ -335,4 +339,65 @@ void ULyraGameInstance::OnPreClientTravelToSession(FString& URL)
 			URL += TEXT("?EncryptionToken=1");
 		}
 	}
+}
+
+FString ULyraGameInstance::GetPersistentPlayerId()
+{
+	// 이미 메모리에 있으면 재사용
+	if (!PersistentPlayerId.IsEmpty())
+	{
+		return PersistentPlayerId;
+	}
+
+	const FString SlotName = TEXT("PersistentPlayerId");
+
+	// ============================================================
+	// 기존 저장 로드
+	// ============================================================
+
+	if (UGameplayStatics::DoesSaveGameExist(SlotName, 0))
+	{
+		if (UPersistentIdSaveGame* Loaded =
+			Cast<UPersistentIdSaveGame>(
+				UGameplayStatics::LoadGameFromSlot(SlotName, 0)))
+		{
+			if (!Loaded->SavedId.IsEmpty())
+			{
+				PersistentPlayerId = Loaded->SavedId;
+
+				UE_LOG(LogInventorySave, Log,
+					TEXT("PersistentId Loaded=%s"),
+					*PersistentPlayerId);
+
+				return PersistentPlayerId;
+			}
+		}
+	}
+
+	// ============================================================
+	// 신규 생성
+	// ============================================================
+
+	PersistentPlayerId = FGuid::NewGuid().ToString();
+
+	UPersistentIdSaveGame* SaveObj =
+		Cast<UPersistentIdSaveGame>(
+			UGameplayStatics::CreateSaveGameObject(
+				UPersistentIdSaveGame::StaticClass()));
+
+	if (SaveObj)
+	{
+		SaveObj->SavedId = PersistentPlayerId;
+
+		UGameplayStatics::SaveGameToSlot(
+			SaveObj,
+			SlotName,
+			0);
+	}
+
+	UE_LOG(LogInventorySave, Log,
+		TEXT("PersistentId Created=%s"),
+		*PersistentPlayerId);
+
+	return PersistentPlayerId;
 }
