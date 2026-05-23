@@ -55,13 +55,17 @@ void ABossCharacterBase::ApplyBossNoPushSettings()
 	{
 		if (UCapsuleComponent* Capsule = GetCapsuleComponent())
 		{
-			Capsule->SetCollisionResponseToChannel(ECC_Pawn, ECR_Overlap);
+			Capsule->SetCollisionResponseToChannel(ECC_Pawn, ECR_Block);
+			Capsule->CanCharacterStepUpOn = ECB_No;
 		}
 	}
 
 	if (UCharacterMovementComponent* MoveComp = GetCharacterMovement())
 	{
 		MoveComp->bEnablePhysicsInteraction = false;
+		MoveComp->RepulsionForce = 0.0f;
+		MoveComp->MaxDepenetrationWithPawn = 0.0f;
+		MoveComp->MaxDepenetrationWithPawnAsProxy = 0.0f;
 	}
 }
 
