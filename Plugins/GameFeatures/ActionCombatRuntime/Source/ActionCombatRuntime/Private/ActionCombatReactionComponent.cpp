@@ -267,6 +267,20 @@ bool UActionCombatReactionComponent::TryApplyReactionHit(const FActionCombatReac
         return false;
     }
 
+    if (UAbilitySystemComponent* OwnerAbilitySystem = UAbilitySystemGlobals::GetAbilitySystemComponentFromActor(GetOwner()))
+    {
+        if (OwnerAbilitySystem->HasMatchingGameplayTag(ActionCombatRuntimeTags::Combat_State_Reaction_Immune))
+        {
+            UE_LOG(
+                LogActionCombatRuntime,
+                Verbose,
+                TEXT("[Reaction:%s] Reaction ignored because owner has %s."),
+                *GetPathNameSafe(GetOwner()),
+                *ActionCombatRuntimeTags::Combat_State_Reaction_Immune.GetTag().ToString());
+            return false;
+        }
+    }
+
     LastReactionInstigatorActor = IncomingHit.InstigatorActor;
 
     if (EnsureReactionSet() == nullptr)
@@ -682,6 +696,20 @@ bool UActionCombatReactionComponent::ForceKnockdownInternal(AActor* InstigatorAc
             TEXT("[Reaction:%s] ForceKnockdown ignored because the caller did not have authority."),
             *GetPathNameSafe(GetOwner()));
         return false;
+    }
+
+    if (UAbilitySystemComponent* OwnerAbilitySystem = UAbilitySystemGlobals::GetAbilitySystemComponentFromActor(GetOwner()))
+    {
+        if (OwnerAbilitySystem->HasMatchingGameplayTag(ActionCombatRuntimeTags::Combat_State_Reaction_Immune))
+        {
+            UE_LOG(
+                LogActionCombatRuntime,
+                Verbose,
+                TEXT("[Reaction:%s] ForceKnockdown ignored because owner has %s."),
+                *GetPathNameSafe(GetOwner()),
+                *ActionCombatRuntimeTags::Combat_State_Reaction_Immune.GetTag().ToString());
+            return false;
+        }
     }
 
     const FVector ResolvedImpulseDirection = ResolveImpulseDirection(InstigatorActor, WorldSpaceImpulseDirection);

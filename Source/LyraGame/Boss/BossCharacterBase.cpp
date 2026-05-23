@@ -1,9 +1,12 @@
 #include "Boss/BossCharacterBase.h"
+#include "ActionCombatRuntimeTags.h"
 #include "Boss/BossCharacterBaseAiController.h"
 #include "AbilitySystem/LyraAbilitySet.h"
 #include "AbilitySystem/LyraAbilitySystemComponent.h"
 #include "AbilitySystemComponent.h"
 #include "Character/LyraHealthComponent.h"
+#include "Components/CapsuleComponent.h"
+#include "GameFramework/CharacterMovementComponent.h"
 #include "GameFramework/PlayerController.h"
 
 ABossCharacterBase::ABossCharacterBase(const FObjectInitializer& ObjectInitializer)
@@ -17,7 +20,9 @@ void ABossCharacterBase::BeginPlay()
 {
 	Super::BeginPlay();
 
-	if (!HasAuthority() || !BossAbilitySet)
+	ApplyBossNoPushSettings();
+
+	if (!HasAuthority())
 	{
 		return;
 	}
@@ -28,11 +33,35 @@ void ABossCharacterBase::BeginPlay()
 		return;
 	}
 
-	BossAbilitySet->GiveToAbilitySystem(BossASC, nullptr);
+	if (BossAbilitySet)
+	{
+		BossAbilitySet->GiveToAbilitySystem(BossASC, nullptr);
+	}
+
+	if (bIgnoreActionCombatReactions)
+	{
+		BossASC->SetLooseGameplayTagCount(ActionCombatRuntimeTags::Combat_State_Reaction_Immune, 1);
+	}
 
 	if (ULyraHealthComponent* HealthComp = ULyraHealthComponent::FindHealthComponent(this))
 	{
 		HealthComp->InitializeWithAbilitySystem(BossASC);
+	}
+}
+
+void ABossCharacterBase::ApplyBossNoPushSettings()
+{
+	if (bPreventPawnPush)
+	{
+		if (UCapsuleComponent* Capsule = GetCapsuleComponent())
+		{
+			Capsule->SetCollisionResponseToChannel(ECC_Pawn, ECR_Overlap);
+		}
+	}
+
+	if (UCharacterMovementComponent* MoveComp = GetCharacterMovement())
+	{
+		MoveComp->bEnablePhysicsInteraction = false;
 	}
 }
 
