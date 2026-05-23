@@ -2,6 +2,7 @@
 
 #include "AbilitySystemComponent.h"
 #include "AbilitySystemGlobals.h"
+#include "ActionCombatReactionComponent.h"
 #include "GA_BossStuan.h"
 #include "Boss/BossCharacterBaseAiController.h"
 #include "Boss/Bear/BearBossBase.h"
@@ -90,27 +91,18 @@ void UGA_Boss_Charge::OnChargeHit(AActor* SelfActor, AActor* OtherActor, FVector
 {
 	UE_LOG(LogTemp, Warning, TEXT("[Stun] OnChargeHit 진입 - OtherActor: %s"), *GetNameSafe(OtherActor));
 
-	UAbilitySystemComponent* OtherASC = UAbilitySystemGlobals::GetAbilitySystemComponentFromActor(OtherActor);
-	if (OtherASC)
+	APawn* OtherPawn = Cast<APawn>(OtherActor);
+	if (OtherPawn && Cast<APlayerController>(OtherPawn->GetController()))
 	{
-		FGameplayTagContainer OwnedTags;
-		OtherASC->GetOwnedGameplayTags(OwnedTags);
-		UE_LOG(LogTemp, Warning, TEXT("[Stun] OtherActor ASC 발견 - 보유 태그: %s"), *OwnedTags.ToString());
-
-		if (OtherASC->HasMatchingGameplayTag(FGameplayTag::RequestGameplayTag("Character.Player")))
-		{
-			UE_LOG(LogTemp, Warning, TEXT("[Stun] 플레이어 히트"));
-			EndAbility(CacheHandle,CacheActorInfo,CacheActivationInfo,true,false);
-		}
-		else
-		{
-			UE_LOG(LogTemp, Warning, TEXT("[Stun] ASC 있지만 Player/Wall 태그 없음 → 무시"));
-		}
+		UE_LOG(LogTemp, Warning, TEXT("[Stun] 플레이어 히트"));
+		UActionCombatReactionComponent::ForceKnockdownActor(OtherActor, SelfActor);
+		EndAbility(CacheHandle, CacheActorInfo, CacheActivationInfo, true, false);
 	}
 	else
 	{
-		UE_LOG(LogTemp, Warning, TEXT("[Stun] OtherActor에 ASC 없음 → 무시 (Actor: %s)"), *GetNameSafe(OtherActor));
+		UE_LOG(LogTemp, Warning, TEXT("[Stun] 플레이어 아님 → 무시 (Actor: %s)"), *GetNameSafe(OtherActor));
 	}
+	
 }
 
 void UGA_Boss_Charge::OnChargeOverlap(AActor* SelfActor, AActor* OtherActor)
