@@ -337,6 +337,12 @@ bool ULyraGameplayAbility::DoesAbilitySatisfyTagRequirements(const UAbilitySyste
 	AllRequiredTags = ActivationRequiredTags;
 	AllBlockedTags = ActivationBlockedTags;
 
+	static const FGameplayTag DashAbilityTag = FGameplayTag::RequestGameplayTag(TEXT("Ability.Type.Action.Dash"), false);
+	if (DashAbilityTag.IsValid() && GetAssetTags().HasTagExact(DashAbilityTag))
+	{
+		AllBlockedTags.AddTag(LyraGameplayTags::Movement_Mode_Falling);
+	}
+
 	// Expand our ability tags to add additional required/blocked tags
 	if (LyraASC)
 	{

@@ -27,6 +27,12 @@ public:
 	UPROPERTY(EditDefaultsOnly, Category = "Boss|Combat")
 	TObjectPtr<UBossAttackWeightData> BossWeightData;
 
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Boss|Combat")
+	bool bPreventPawnPush = true;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Boss|Combat")
+	bool bIgnoreActionCombatReactions = true;
+
 	//현재 공격태그
 	UPROPERTY(BlueprintReadOnly, Category = "Boss|Combat")
 	FGameplayTag SelectedAttackTag;
@@ -45,4 +51,7 @@ protected:
 
 	UFUNCTION(BlueprintCallable, Category = "Boss|Debug")
 	void DebugKill();
+
+private:
+	void ApplyBossNoPushSettings();
 };

@@ -7,4 +7,5 @@ namespace ActionCombatRuntimeTags
     UE_DEFINE_GAMEPLAY_TAG_COMMENT(Combat_State_Reaction_HeavyHit, "Combat.State.Reaction.HeavyHit", "Owner is inside a heavier stagger state caused by poise break.");
     UE_DEFINE_GAMEPLAY_TAG_COMMENT(Combat_State_Reaction_Knockdown, "Combat.State.Reaction.Knockdown", "Owner has been knocked down by a very heavy hit or repeated poise breaks.");
     UE_DEFINE_GAMEPLAY_TAG_COMMENT(Combat_State_Reaction_GetUp, "Combat.State.Reaction.GetUp", "Owner is recovering from knockdown and should not start new combat actions yet.");
+    UE_DEFINE_GAMEPLAY_TAG_COMMENT(Combat_State_Reaction_Immune, "Combat.State.Reaction.Immune", "Owner ignores ActionCombat reaction hits while this tag is active.");
 }

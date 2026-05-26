@@ -87,6 +87,12 @@ protected:
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Action Combat|Dash Dodge")
     bool bGrantFallbackDashAbilityOnServerIfMissing = true;
 
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Action Combat|Dash Dodge")
+    bool bDisableCharacterJump = true;
+
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Action Combat|Dash Dodge")
+    bool bPreventDashStepUp = true;
+
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Action Combat|Dash Dodge", meta = (Categories = "Ability.Type"))
     FGameplayTag ObservedDashAbilityTag;
 
@@ -137,6 +143,10 @@ private:
     ULockOnComponent* ResolveLockOnComponent() const;
     void EnsureFallbackDashAbilityGranted();
     void SetActionMovementBlockActive(bool bNewActive);
+    void ApplyJumpPolicy();
+    void RestoreJumpPolicy();
+    void SetDashGroundMovementPolicyActive(bool bNewDashStateActive);
+    bool CanMirrorDashStateOnThisPawn() const;
     bool HasObservedDashAbilitySpec(const ULyraAbilitySystemComponent& AbilitySystemComponent) const;
     void RefreshMirroredDashStateFromAbilitySystem();
     void SetMirroredDashStateActive(bool bNewDashStateActive);
@@ -180,6 +190,10 @@ private:
     bool bMirroredDashStateActive = false;
     bool bObservedDashAbilityTagActive = false;
     int32 ActiveObservedDashAbilityCount = 0;
+    bool bJumpPolicyApplied = false;
+    bool bSavedJumpAllowed = true;
+    bool bDashGroundMovementPolicyActive = false;
+    float SavedDashMaxStepHeight = 0.0f;
     float LastObservedStamina = 100.0f;
     float LastStaminaSpendTimeSeconds = -1000.0f;
     bool bActionFacingActive = false;

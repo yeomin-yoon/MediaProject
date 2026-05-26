@@ -102,6 +102,7 @@ void UGA_Boss_Charge::OnChargeHit(AActor* SelfActor, AActor* OtherActor, FVector
 	{
 		UE_LOG(LogTemp, Warning, TEXT("[Stun] 플레이어 아님 → 무시 (Actor: %s)"), *GetNameSafe(OtherActor));
 	}
+	
 }
 
 void UGA_Boss_Charge::OnChargeOverlap(AActor* SelfActor, AActor* OtherActor)
