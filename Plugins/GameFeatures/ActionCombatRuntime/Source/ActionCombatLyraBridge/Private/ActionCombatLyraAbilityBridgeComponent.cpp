@@ -11,6 +11,8 @@
 #include "Abilities/GameplayAbility.h"
 #include "AbilitySystem/LyraAbilitySystemComponent.h"
 #include "Character/LyraPawnExtensionComponent.h"
+#include "GameFramework/Character.h"
+#include "GameFramework/CharacterMovementComponent.h"
 #include "GameFramework/Controller.h"
 #include "GameFramework/Pawn.h"
 
@@ -31,6 +33,7 @@ UActionCombatLyraAbilityBridgeComponent::UActionCombatLyraAbilityBridgeComponent
 void UActionCombatLyraAbilityBridgeComponent::BeginPlay()
 {
     Super::BeginPlay();
+    ApplyJumpPolicy();
     BindPawnExtension();
     TryBindCombatComponent();
     HandleAbilitySystemInitialized();
@@ -40,6 +43,7 @@ void UActionCombatLyraAbilityBridgeComponent::EndPlay(const EEndPlayReason::Type
 {
     UnbindLyraAbilitySystemComponent();
     UnbindCombatComponent();
+    RestoreJumpPolicy();
     Super::EndPlay(EndPlayReason);
 }
 
@@ -112,12 +116,10 @@ void UActionCombatLyraAbilityBridgeComponent::BindLyraAbilitySystemComponent(ULy
     EnsureStaminaAttributeSetRegistered();
     EnsureFallbackDashAbilityGranted();
 
-    const APawn* Pawn = ResolvePawnOwner();
-    const bool bShouldMirrorDashState = bMirrorDashAbilityToCombatState
-        && ObservedDashAbilityTag.IsValid()
-        && (!bMirrorDashStateOnlyOnAuthority || (Pawn && Pawn->HasAuthority()));
+    const bool bShouldObserveDashState = ObservedDashAbilityTag.IsValid()
+        && (bMirrorDashAbilityToCombatState || bPreventDashStepUp);
 
-    if (!bShouldMirrorDashState)
+    if (!bShouldObserveDashState)
     {
         return;
     }
@@ -126,7 +128,7 @@ void UActionCombatLyraAbilityBridgeComponent::BindLyraAbilitySystemComponent(ULy
     DashAbilityActivatedHandle = AbilitySystemComponent->AbilityActivatedCallbacks.AddUObject(this, &ThisClass::HandleObservedAbilityActivated);
     DashAbilityEndedHandle = AbilitySystemComponent->AbilityEndedCallbacks.AddUObject(this, &ThisClass::HandleObservedAbilityEnded);
     RefreshMirroredDashStateFromAbilitySystem();
-    LogBridge(FString::Printf(TEXT("Bound dash dodge mirroring to ASC. ObservedTag=%s"), *ObservedDashAbilityTag.ToString()));
+    LogBridge(FString::Printf(TEXT("Bound dash observation to ASC. ObservedTag=%s"), *ObservedDashAbilityTag.ToString()));
 }
 
 void UActionCombatLyraAbilityBridgeComponent::UnbindLyraAbilitySystemComponent()
@@ -154,6 +156,7 @@ void UActionCombatLyraAbilityBridgeComponent::UnbindLyraAbilitySystemComponent()
         SetMirroredDashStateActive(false);
     }
 
+    SetDashGroundMovementPolicyActive(false);
     BoundAbilitySystemComponent.Reset();
     OwnedStaminaSet = nullptr;
     SetActionMovementBlockActive(false);
@@ -427,6 +430,89 @@ void UActionCombatLyraAbilityBridgeComponent::SetActionMovementBlockActive(bool 
     AbilitySystemComponent->SetLooseGameplayTagCount(ActionCombatLyraBridgeTags::Combat_State_Action, bNewActive ? 1 : 0);
 }
 
+void UActionCombatLyraAbilityBridgeComponent::ApplyJumpPolicy()
+{
+    if (!bDisableCharacterJump)
+    {
+        return;
+    }
+
+    ACharacter* Character = Cast<ACharacter>(ResolvePawnOwner());
+    UCharacterMovementComponent* MovementComponent = Character ? Character->GetCharacterMovement() : nullptr;
+    if (!MovementComponent)
+    {
+        return;
+    }
+
+    if (!bJumpPolicyApplied)
+    {
+        bSavedJumpAllowed = MovementComponent->IsJumpAllowed();
+        bJumpPolicyApplied = true;
+    }
+
+    MovementComponent->SetJumpAllowed(false);
+    Character->StopJumping();
+}
+
+void UActionCombatLyraAbilityBridgeComponent::RestoreJumpPolicy()
+{
+    if (!bJumpPolicyApplied)
+    {
+        return;
+    }
+
+    if (ACharacter* Character = Cast<ACharacter>(ResolvePawnOwner()))
+    {
+        if (UCharacterMovementComponent* MovementComponent = Character->GetCharacterMovement())
+        {
+            MovementComponent->SetJumpAllowed(bSavedJumpAllowed);
+        }
+    }
+
+    bJumpPolicyApplied = false;
+}
+
+void UActionCombatLyraAbilityBridgeComponent::SetDashGroundMovementPolicyActive(bool bNewDashStateActive)
+{
+    const bool bShouldApplyPolicy = bPreventDashStepUp && bNewDashStateActive;
+    if (bDashGroundMovementPolicyActive == bShouldApplyPolicy)
+    {
+        return;
+    }
+
+    ACharacter* Character = Cast<ACharacter>(ResolvePawnOwner());
+    UCharacterMovementComponent* MovementComponent = Character ? Character->GetCharacterMovement() : nullptr;
+    if (!MovementComponent)
+    {
+        bDashGroundMovementPolicyActive = false;
+        return;
+    }
+
+    if (bShouldApplyPolicy)
+    {
+        SavedDashMaxStepHeight = MovementComponent->MaxStepHeight;
+        MovementComponent->MaxStepHeight = 0.0f;
+        bDashGroundMovementPolicyActive = true;
+        LogBridge(TEXT("Disabled character step-up while dash is active."));
+        return;
+    }
+
+    MovementComponent->MaxStepHeight = SavedDashMaxStepHeight;
+    bDashGroundMovementPolicyActive = false;
+    LogBridge(TEXT("Restored character step-up after dash ended."));
+}
+
+bool UActionCombatLyraAbilityBridgeComponent::CanMirrorDashStateOnThisPawn() const
+{
+    if (!bMirrorDashAbilityToCombatState)
+    {
+        return false;
+    }
+
+    const APawn* Pawn = ResolvePawnOwner();
+    return !bMirrorDashStateOnlyOnAuthority || (Pawn && Pawn->HasAuthority());
+}
+
 bool UActionCombatLyraAbilityBridgeComponent::HasObservedDashAbilitySpec(const ULyraAbilitySystemComponent& AbilitySystemComponent) const
 {
     for (const FGameplayAbilitySpec& AbilitySpec : AbilitySystemComponent.GetActivatableAbilities())
@@ -450,7 +536,9 @@ void UActionCombatLyraAbilityBridgeComponent::RefreshMirroredDashStateFromAbilit
 
 void UActionCombatLyraAbilityBridgeComponent::SetMirroredDashStateActive(bool bNewDashStateActive)
 {
-    if (!bMirrorDashAbilityToCombatState)
+    SetDashGroundMovementPolicyActive(bNewDashStateActive);
+
+    if (!CanMirrorDashStateOnThisPawn())
     {
         return;
     }
@@ -697,6 +785,7 @@ void UActionCombatLyraAbilityBridgeComponent::HandleObservedAbilityEnded(UGamepl
 
 void UActionCombatLyraAbilityBridgeComponent::HandleAbilitySystemInitialized()
 {
+    ApplyJumpPolicy();
     BindLyraAbilitySystemComponent(ResolveLyraAbilitySystemComponent());
 }
 
