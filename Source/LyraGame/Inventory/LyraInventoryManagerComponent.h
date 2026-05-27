@@ -44,6 +44,9 @@ struct FLyraInventoryChangeMessage
 
 	UPROPERTY()
 	EItemOptionType OptionType = EItemOptionType::Attack;
+
+	UPROPERTY(BlueprintReadOnly, Category = Inventory)
+	bool bSuppressToast = false;
 };
 
 /** A single entry in an inventory */
@@ -195,6 +198,8 @@ public:
 	
 	UPROPERTY(Replicated)
 	FLyraInventoryList InventoryList;
+
+	bool bIsLoadingInventory = false;
 	
 	void SaveInventory();
 };

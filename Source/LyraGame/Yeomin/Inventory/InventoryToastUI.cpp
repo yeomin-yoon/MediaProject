@@ -41,6 +41,9 @@ void UInventoryToastUI::HandleInventoryMessage(
 	if (!Message.Instance)
 		return;
 
+	if (Message.bSuppressToast)
+		return;
+
 	if (Message.Delta <= 0)
 		return;
 	

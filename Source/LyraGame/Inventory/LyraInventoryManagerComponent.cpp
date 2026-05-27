@@ -103,6 +103,11 @@ void FLyraInventoryList::BroadcastChangeMessage(
 	Message.NewCount = NewCount;
 	Message.Delta = NewCount - OldCount;
 
+	if (ULyraInventoryManagerComponent* InvMgr = Cast<ULyraInventoryManagerComponent>(OwnerComponent))
+	{
+		Message.bSuppressToast = InvMgr->bIsLoadingInventory;
+	}
+
 	// =========================
 	// Rarity / OptionType 반드시 전달
 	// =========================
@@ -810,6 +815,8 @@ FInventorySaveData ULyraInventoryManagerComponent::MakeSaveData() const
 void ULyraInventoryManagerComponent::LoadFromSaveData(
 	const FInventorySaveData& SaveData)
 {
+	bIsLoadingInventory = true;
+
 	APlayerController* PC = Cast<APlayerController>(GetOwner());
 	APlayerState* PS = PC ? PC->GetPlayerState<APlayerState>() : nullptr;
 	UAbilitySystemComponent* ASC = PS ? PS->FindComponentByClass<UAbilitySystemComponent>() : nullptr;
@@ -879,6 +886,8 @@ void ULyraInventoryManagerComponent::LoadFromSaveData(
 	}
 
 	OnEquipChanged.Broadcast();
+
+	bIsLoadingInventory = false;
 }
 
 void ULyraInventoryManagerComponent::BroadcastItemAdded(
@@ -902,6 +911,7 @@ void ULyraInventoryManagerComponent::BroadcastItemAdded(
 	// 여기서 확정값 전달
 	Message.Rarity = Instance->Rarity;
 	Message.OptionType = Instance->OptionType;
+	Message.bSuppressToast = bIsLoadingInventory;
 
 	UGameplayMessageSubsystem::Get(World)
 		.BroadcastMessage(
@@ -912,6 +922,11 @@ void ULyraInventoryManagerComponent::BroadcastItemAdded(
 
 void ULyraInventoryManagerComponent::SaveInventory()
 {
+	if (bIsLoadingInventory)
+	{
+		return;
+	}
+
 	ALyraPlayerController* PC =
 		Cast<ALyraPlayerController>(GetOwner());
 
