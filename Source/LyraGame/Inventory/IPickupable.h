@@ -6,6 +6,7 @@
 #include "Templates/SubclassOf.h"
 #include "UObject/Interface.h"
 
+#include "Inventory/LyraInventoryItemInstance.h"
 #include "UObject/ObjectPtr.h"
 #include "IPickupable.generated.h"
 
@@ -29,6 +30,15 @@ public:
 
 	UPROPERTY(EditAnywhere)
 	TSubclassOf<ULyraInventoryItemDefinition> ItemDef;
+	
+	UPROPERTY()
+	int32 RandomSeed = 0;
+
+	UPROPERTY()
+	EItemOptionType OptionType = EItemOptionType::Attack;
+	
+	UPROPERTY()
+	EItemRarity Rarity = EItemRarity::Common;
 };
 
 USTRUCT(BlueprintType)

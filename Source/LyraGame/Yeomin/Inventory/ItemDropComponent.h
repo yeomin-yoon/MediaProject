@@ -17,11 +17,9 @@ public:
 	UItemDropComponent();
 
 protected:
-	virtual void BeginPlay() override;
-	
 	UFUNCTION(BlueprintCallable)
 	void DropItems();
-	
+
 private:
 	void SpawnOneItem();
 	

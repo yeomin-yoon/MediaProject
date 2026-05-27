@@ -83,6 +83,7 @@ public class LyraGame : ModuleRules
 				"DTLSHandlerComponent",
 				"Json",
 				"ModelViewViewModel", "ModelViewViewModel", "ModelViewViewModel",
+				"Niagara",
 			}
 		);
 

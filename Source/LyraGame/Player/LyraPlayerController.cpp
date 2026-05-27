@@ -35,7 +35,10 @@
 #include "HttpServerModule.h"
 #endif
 
+#include "Blueprint/UserWidget.h"
 #include "Inventory/LyraInventoryManagerComponent.h"
+#include "System/LyraGameInstance.h"
+#include "Yeomin/Inventory/InventoryLogChannels.h"
 #include "Yeomin/Inventory/InventorySaveSubsystem.h"
 
 #include UE_INLINE_GENERATED_CPP_BY_NAME(LyraPlayerController)
@@ -69,24 +72,49 @@ void ALyraPlayerController::PreInitializeComponents()
 void ALyraPlayerController::BeginPlay()
 {
 	Super::BeginPlay();
-	#if WITH_RPC_REGISTRY
+
+#if WITH_RPC_REGISTRY
 	FHttpServerModule::Get().StartAllListeners();
+
 	int32 RpcPort = 0;
 	if (FParse::Value(FCommandLine::Get(), TEXT("rpcport="), RpcPort))
 	{
-		ULyraGameplayRpcRegistrationComponent* ObjectInstance = ULyraGameplayRpcRegistrationComponent::GetInstance();
-		if (ObjectInstance && ObjectInstance->IsValidLowLevel())
+		if (ULyraGameplayRpcRegistrationComponent* ObjectInstance =
+			ULyraGameplayRpcRegistrationComponent::GetInstance())
 		{
 			ObjectInstance->RegisterAlwaysOnHttpCallbacks();
 			ObjectInstance->RegisterInMatchHttpCallbacks();
 		}
 	}
-	#endif
+#endif
+
 	SetActorHiddenInGame(false);
+
+	// ===== UI SAFE LOAD =====
+	UClass* WidgetClass = LoadClass<UUserWidget>(
+		nullptr,
+		TEXT("/ShooterExplorer/UserInterface/W_ItemAcquiredList.W_ItemAcquiredList_C")
+	);
+
+	if (WidgetClass)
+	{
+		if (UUserWidget* Widget = CreateWidget<UUserWidget>(this, WidgetClass))
+		{
+			Widget->AddToViewport(9999);
+		}
+	}
+	
+	if (UGameInstance* GI = GetGameInstance())
+	{
+		if (UInventorySaveSubsystem* SaveSys = GI->GetSubsystem<UInventorySaveSubsystem>())
+		{
+			SaveSys->TryInitializeLoad();
+		}
+	}
 }
 
 void ALyraPlayerController::EndPlay(const EEndPlayReason::Type EndPlayReason)
-{
+{	
 	Super::EndPlay(EndPlayReason);
 }
 
@@ -365,79 +393,101 @@ void ALyraPlayerController::MarkLobbyReadyAndMaybeTravelToExperience(const ULyra
 	TravelConnectedLobbyToExperience(UserFacingExperience);
 }
 
+FString ALyraPlayerController::GetInventorySavePlayerId() const
+{
+	UWorld* World = GetWorld();
+
+	if (!World)
+	{
+		return TEXT("INVALID_WORLD");
+	}
+
+	ULyraGameInstance* GI =
+		Cast<ULyraGameInstance>(World->GetGameInstance());
+
+	if (!GI)
+	{
+		return TEXT("INVALID_GI");
+	}
+
+	// ============================================================
+	// 핵심
+	// ============================================================
+
+	return GI->GetPersistentPlayerId();
+}
+
 // LyraPlayerController.cpp
 
 void ALyraPlayerController::SaveInventoryBeforeTravel()
 {
 	if (!HasAuthority())
-	{
-		UE_LOG(LogTemp, Warning, TEXT("Save skipped (Not Authority)"));
 		return;
-	}
-
-	UE_LOG(LogTemp, Warning, TEXT("=== SaveInventoryBeforeTravel START ==="));
 
 	UInventorySaveSubsystem* SaveSys =
-		GetGameInstance()->GetSubsystem<UInventorySaveSubsystem>();
+		GetGameInstance() ? GetGameInstance()->GetSubsystem<UInventorySaveSubsystem>() : nullptr;
 
 	if (!SaveSys)
-	{
-		UE_LOG(LogTemp, Error, TEXT("SaveSys NULL"));
 		return;
-	}
 
 	ULyraInventoryManagerComponent* Inv =
-		FindComponentByClass<ULyraInventoryManagerComponent>();
+	FindComponentByClass<ULyraInventoryManagerComponent>();
 
 	if (!Inv)
-	{
-		UE_LOG(LogTemp, Error, TEXT("InventoryComponent NULL"));
 		return;
-	}
 
-	FInventorySaveData Data = Inv->MakeSaveData();
+	const FString PlayerId = GetInventorySavePlayerId();
 
-	FString PlayerId = "LocalPlayer";
+	if (PlayerId.IsEmpty())
+		return;
+
+	const FInventorySaveData Data = Inv->MakeSaveData();
 
 	SaveSys->SetInventory(PlayerId, Data);
-
-	UE_LOG(LogTemp, Warning, TEXT("Saved Inventory: %s"), *PlayerId);
+	SaveSys->SaveInventoryToDisk(PlayerId);
 }
 
 void ALyraPlayerController::LoadInventoryAfterTravel()
 {
-	UInventorySaveSubsystem* SaveSys =
-		GetGameInstance()->GetSubsystem<UInventorySaveSubsystem>();
-		
-	UE_LOG(LogTemp, Warning, TEXT("[LOAD] SaveSys Ptr: %p"), SaveSys);
-
-	if (!SaveSys) return;
-
-	APlayerState* PS = GetPlayerState<APlayerState>();
-	if (!PS) return;
-
-	FString PlayerId = "LocalPlayer";
-
-	FInventorySaveData Data;
-	if (!SaveSys->GetInventory(PlayerId, Data))
-	{
-		UE_LOG(LogTemp, Warning, TEXT("Load Failed: %s"), *PlayerId);
+	if (!HasAuthority())
 		return;
-	}
+
+	if (bInventoryLoadedFromSave)
+		return;
+
+	UInventorySaveSubsystem* SaveSys =
+		GetGameInstance() ? GetGameInstance()->GetSubsystem<UInventorySaveSubsystem>() : nullptr;
+
+	if (!SaveSys)
+		return;
 
 	ULyraInventoryManagerComponent* Inv =
-		FindComponentByClass<ULyraInventoryManagerComponent>();
+	FindComponentByClass<ULyraInventoryManagerComponent>();
 
-	if (!Inv) return;
+	if (!Inv)
+		return;
+
+	const FString PlayerId = GetInventorySavePlayerId();
+
+	if (PlayerId.IsEmpty())
+		return;
+
+	FInventorySaveData Data;
+
+	if (!SaveSys->GetInventory(PlayerId, Data))
+	{
+		if (!SaveSys->LoadInventoryFromDisk(PlayerId, Data))
+			return;
+	}
 
 	Inv->LoadFromSaveData(Data);
-
-	UE_LOG(LogTemp, Warning, TEXT("Loaded Inventory: %s"), *PlayerId);
+	bInventoryLoadedFromSave = true;
 }
 
 void ALyraPlayerController::TravelConnectedLobbyToExperience(const ULyraUserFacingExperienceDefinition* UserFacingExperience)
 {
-	UE_LOG(LogTemp, Warning, TEXT("=== ServerTravel START ==="));
+	UE_LOG(LogInventorySave, Log, TEXT("ServerTravel Start"));
+	
 	if (!HasAuthority() || !UserFacingExperience)
 	{
 		return;
@@ -457,6 +507,14 @@ void ALyraPlayerController::TravelConnectedLobbyToExperience(const ULyraUserFaci
 
 	if (UWorld* World = GetWorld())
 	{
+		for (FConstPlayerControllerIterator It = World->GetPlayerControllerIterator(); It; ++It)
+		{
+			if (ALyraPlayerController* LyraPC = Cast<ALyraPlayerController>(It->Get()))
+			{
+				LyraPC->SaveInventoryBeforeTravel();
+			}
+		}
+
 		World->ServerTravel(Request->ConstructTravelURL());
 	}
 }
@@ -682,34 +740,14 @@ void ALyraPlayerController::OnCameraPenetratingTarget()
 void ALyraPlayerController::OnPossess(APawn* InPawn)
 {
 	Super::OnPossess(InPawn);
+
 	PushLocalLobbyLoadoutToServer();
-
-#if WITH_SERVER_CODE && WITH_EDITOR
-	if (GIsEditor && (InPawn != nullptr) && (GetPawn() == InPawn))
-	{
-		for (const FLyraCheatToRun& CheatRow : GetDefault<ULyraDeveloperSettings>()->CheatsToRun)
-		{
-			if (CheatRow.Phase == ECheatExecutionTime::OnPlayerPawnPossession)
-			{
-				ConsoleCommand(CheatRow.Cheat, /*bWriteToLog=*/ true);
-			}
-		}
-	}
-#endif
-
 	SetIsAutoRunning(false);
-	
-	// =========================
-	// Inventory Load (SAFE)
-	// =========================
-	FTimerHandle TimerHandle;
-	GetWorld()->GetTimerManager().SetTimer(
-		TimerHandle,
-		this,
-		&ALyraPlayerController::LoadInventoryAfterTravel,
-		0.1f,
-		false
-	);
+
+	if (HasAuthority())
+	{
+		LoadInventoryAfterTravel();
+	}
 }
 
 void ALyraPlayerController::SetIsAutoRunning(const bool bEnabled)
