@@ -360,6 +360,10 @@
 		{
 			"Name": "ModelViewViewModelPreview",
 			"Enabled": true
+		},
+		{
+			"Name": "Soundscape",
+			"Enabled": true
 		}
 	],
 	"EpicSampleNameHash": "451731683"
