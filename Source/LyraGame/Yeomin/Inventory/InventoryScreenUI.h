@@ -16,6 +16,7 @@ class LYRAGAME_API UInventoryScreenUI : public UCommonActivatableWidget
 	GENERATED_BODY()
 	
 protected:
+	virtual void NativeOnActivated() override;
 	virtual void NativeOnDeactivated() override;
 
 	UPROPERTY(meta = (BindWidget))
@@ -29,6 +30,18 @@ protected:
 	
 	UPROPERTY(EditDefaultsOnly, Category="UI")
 	TSubclassOf<UInventoryTileUI> InventoryTileClass;
+
+	UPROPERTY(EditDefaultsOnly, Category = "UI")
+	TObjectPtr<USoundBase> EquipSound;
+
+	UPROPERTY(EditDefaultsOnly, Category = "UI")
+	TObjectPtr<USoundBase> UnequipSound;
+
+	UPROPERTY(EditDefaultsOnly, Category = "UI")
+	TObjectPtr<USoundBase> OpenSound;
+
+	UPROPERTY(EditDefaultsOnly, Category = "UI")
+	TObjectPtr<USoundBase> CloseSound;
 	
 	UPROPERTY()
 	TArray<TObjectPtr<UInventoryTileUI>> EquipWidgets;

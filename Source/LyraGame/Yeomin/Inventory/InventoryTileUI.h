@@ -61,6 +61,12 @@ protected:
 	
 	UPROPERTY(EditDefaultsOnly, Category="Drop")
 	TSubclassOf<ALyraWorldCollectable> ItemDropClass;
+
+	UPROPERTY(EditDefaultsOnly, Category = "Drop")
+	TObjectPtr<USoundBase> DropSound;
+	
+	UPROPERTY(EditDefaultsOnly, Category = "Drop")
+	float DropSoundVolume = 1.0f;
 	
 	UPROPERTY(EditAnywhere)
 	TSubclassOf<UInventoryItemToolTipUI> TooltipClass;

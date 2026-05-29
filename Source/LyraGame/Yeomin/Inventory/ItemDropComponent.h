@@ -27,7 +27,7 @@ private:
 	TSubclassOf<ALyraWorldCollectable> ItemClass;
 
 	UPROPERTY(EditAnywhere)
-	int32 DropCount = 7;
+	int32 DropCount = 13;
 
 	UPROPERTY(EditAnywhere)
 	float SpawnInterval = 0.05f;

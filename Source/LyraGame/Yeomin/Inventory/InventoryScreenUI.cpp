@@ -5,6 +5,24 @@
 #include "InventoryTileUI.h"
 #include "Components/Border.h"
 #include "Inventory/LyraInventoryManagerComponent.h"
+#include "Kismet/GameplayStatics.h"
+
+void UInventoryScreenUI::NativeOnActivated()
+{
+	Super::NativeOnActivated();
+
+	// 여는 소리 재생 (Highlight)
+	USoundBase* SoundToPlay = OpenSound.Get();
+	if (!SoundToPlay)
+	{
+		SoundToPlay = LoadObject<USoundBase>(nullptr, TEXT("/Game/Audio/Sounds/UI/sfx_UI_SubMenu_Highlight_nl_meta_Preset.sfx_UI_SubMenu_Highlight_nl_meta_Preset"));
+	}
+
+	if (SoundToPlay)
+	{
+		UGameplayStatics::PlaySound2D(GetWorld(), SoundToPlay);
+	}
+}
 
 void UInventoryScreenUI::NativeOnDeactivated()
 {
@@ -13,6 +31,18 @@ void UInventoryScreenUI::NativeOnDeactivated()
 	if (CachedInventory)
 	{
 		CachedInventory->OnEquipChanged.RemoveAll(this);
+	}
+
+	// 닫는 소리 재생 (Select)
+	USoundBase* SoundToPlay = CloseSound.Get();
+	if (!SoundToPlay)
+	{
+		SoundToPlay = LoadObject<USoundBase>(nullptr, TEXT("/Game/Audio/Sounds/UI/sfx_UI_SubMenu_Select_nl_meta_Preset.sfx_UI_SubMenu_Select_nl_meta_Preset"));
+	}
+
+	if (SoundToPlay)
+	{
+		UGameplayStatics::PlaySound2D(GetWorld(), SoundToPlay);
 	}
 
 	UCommonUIExtensions::PopContentFromLayer(this);
@@ -90,6 +120,19 @@ bool UInventoryScreenUI::NativeOnDrop(
 			WidgetGridUI->InitInventory();
 
 		RefreshEquipSlots();
+
+		// 장착 사운드 재생 (ZoomIn)
+		USoundBase* SoundToPlay = EquipSound.Get();
+		if (!SoundToPlay)
+		{
+			SoundToPlay = LoadObject<USoundBase>(nullptr, TEXT("/Game/Audio/MetaSounds/sfx_ZoomIn_nl_meta_Preset.sfx_ZoomIn_nl_meta_Preset"));
+		}
+
+		if (SoundToPlay)
+		{
+			UGameplayStatics::PlaySound2D(GetWorld(), SoundToPlay);
+		}
+
 		return true;
 	}
 
@@ -104,6 +147,19 @@ bool UInventoryScreenUI::NativeOnDrop(
 			WidgetGridUI->InitInventory();
 
 		RefreshEquipSlots();
+
+		// 해제 사운드 재생 (ZoomOut)
+		USoundBase* SoundToPlay = UnequipSound.Get();
+		if (!SoundToPlay)
+		{
+			SoundToPlay = LoadObject<USoundBase>(nullptr, TEXT("/Game/Audio/MetaSounds/sfx_ZoomOut_nl_meta_Preset.sfx_ZoomOut_nl_meta_Preset"));
+		}
+
+		if (SoundToPlay)
+		{
+			UGameplayStatics::PlaySound2D(GetWorld(), SoundToPlay);
+		}
+
 		return true;
 	}
 

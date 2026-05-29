@@ -10,6 +10,7 @@
 #include "Components/Image.h"
 #include "Inventory/LyraInventoryItemInstance.h"
 #include "Inventory/LyraInventoryManagerComponent.h"
+#include "Kismet/GameplayStatics.h"
 
 void UInventoryTileUI::NativeOnMouseEnter(
 	const FGeometry& InGeometry,
@@ -245,4 +246,22 @@ void UInventoryTileUI::NativeOnDragCancelled(
 	// 8. UI 제거
 	// =========================
 	RemoveItem();
+
+	// =========================
+	// 9. 사운드 재생
+	// =========================
+	USoundBase* SoundToPlay = DropSound.Get();
+	if (!SoundToPlay)
+	{
+		SoundToPlay = LoadObject<USoundBase>(nullptr, TEXT("/Game/Audio/MetaSounds/sfx_MeleeWhoosh_nl_meta_Preset.sfx_MeleeWhoosh_nl_meta_Preset"));
+	}
+
+	if (SoundToPlay)
+	{
+		UGameplayStatics::PlaySound2D(
+			World, 
+			SoundToPlay,
+			DropSoundVolume
+		);
+	}
 }
