@@ -42,6 +42,12 @@ FReply UInventoryTileUI::NativeOnMouseButtonDown(const FGeometry& InGeometry, co
 		return FReply::Handled().DetectDrag(TakeWidget(), EKeys::LeftMouseButton);
 	}
 
+	if (InMouseEvent.IsMouseButtonDown(EKeys::RightMouseButton))
+	{
+		DropItem();
+		return FReply::Handled();
+	}
+
 	return Super::NativeOnMouseButtonDown(InGeometry, InMouseEvent);
 }
 
@@ -147,6 +153,11 @@ void UInventoryTileUI::NativeOnDragCancelled(
 	if (!DragOp || DragOp->bDroppedOnValidTarget)
 		return;
 
+	DropItem();
+}
+
+void UInventoryTileUI::DropItem()
+{
 	if (!ItemInstance)
 		return;
 

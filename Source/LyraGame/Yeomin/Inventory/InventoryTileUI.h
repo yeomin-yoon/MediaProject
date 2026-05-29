@@ -31,6 +31,8 @@ public:
 	
 	void RemoveItem();
 
+	void DropItem();
+
 protected:
 	UPROPERTY(BlueprintReadWrite, meta = (BindWidget))
 	TObjectPtr<UImage> TileIMG;
