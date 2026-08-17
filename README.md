@@ -2,8 +2,8 @@
 
 소울라이크 전투에 파밍과 반복 성장을 결합한 액션 RPG
 
-**Unreal Engine 5.5** · Lyra Starter Game · Gameplay Ability System
-장르 액션 RPG · 플랫폼 PC · UE 클라이언트 3인 · 개발 기간 9주 (2026.03 ~ 2026.05)
+**Unreal Engine 5.5** · Lyra Starter Game · Gameplay Ability System<br>
+장르 액션 RPG · 플랫폼 PC · UE 클라이언트 3인 · 개발 기간 9주 (2026.03 ~ 2026.05)<br>
 2026 AJOU SOFTCON 미디어프로젝트 출품
 
 ## 게임 소개
