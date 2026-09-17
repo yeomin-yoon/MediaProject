@@ -1,10 +1,12 @@
 # Codex of Ashes
 
-소울라이크 전투에 파밍과 반복 성장을 결합한 액션 RPG
+던전 파밍과 누적 성장을 결합한 액션 게임
 
 **Unreal Engine 5.5** · Lyra Starter Game · Gameplay Ability System<br>
-장르 액션 RPG · 플랫폼 PC · UE 클라이언트 3인 · 개발 기간 9주 (2026.03 ~ 2026.05)<br>
+장르 액션 · 플랫폼 PC · UE 클라이언트 3인 · 개발 기간 9주 (2026.03 ~ 2026.05)<br>
 2026 AJOU SOFTCON 미디어프로젝트 출품
+
+[시연 영상](https://youtu.be/r3E8gHR1bFk) · [상세 기술 문서](https://app.notion.com/p/Codex-of-Ashes-349e6578029f80efa8edc40cbe80b4f3)
 
 ## 게임 소개
 
@@ -31,7 +33,7 @@ UE5의 Lyra Starter Game을 기반으로, 무기별 콤보와 공격 패턴, 치
 
 **인벤토리 · 장비** — [@yeomin-yoon](https://github.com/yeomin-yoon)
 
-- 대량 아이템 데이터를 위한 네트워크 복제 구조와 모듈형 아이템 설계
+- Lyra 인벤토리의 Fast Array · Item Instance 구조를 확장한 아이템 관리
 - 등급 · 랜덤 옵션으로 동일 장비도 서로 다른 능력치를 갖도록 구성, 장착 시 스탯 실시간 반영
 - Drag & Drop UI와 획득 Toast, 맵 이동 · 재실행 이후 데이터를 유지하는 Persistence 구조
 
@@ -41,4 +43,8 @@ Unreal Engine 5.5 · C++ · Blueprint · Lyra Starter Game
 
 ## 관련 링크
 
-공개용 저장소 — https://github.com/byam12/forpublic
+- [MediaProject](https://github.com/yeomin-yoon/MediaProject): 이 README와 프로젝트 코드를 확인할 수 있는 저장소입니다.
+- [공개용 저장소](https://github.com/byam12/forpublic): 같은 프로젝트에서 외부 에셋과 비공개 자료 등을 제외해 별도로 정리한 공개본입니다. 인벤토리 코드만 분리한 저장소는 아닙니다.
+
+공개용 저장소는 단독 실행용 전체 프로젝트가 아닙니다. 사용하려면 Unreal Engine 5.5.4의 Lyra Starter Game에 파일을 적용하고, 필요한 외부 에셋을 적법하게 확보해야 합니다. 포함·제외 파일과 사용 조건은 해당 저장소의 README 및 `LICENSE.md`를 확인해 주세요.
+
