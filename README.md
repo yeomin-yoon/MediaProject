@@ -6,7 +6,7 @@
 장르 액션 · 플랫폼 PC · UE 클라이언트 3인 · 개발 기간 9주 (2026.03 ~ 2026.05)<br>
 2026 AJOU SOFTCON 미디어프로젝트 출품
 
-[시연 영상](https://youtu.be/r3E8gHR1bFk) · [상세 기술 문서](https://app.notion.com/p/Codex-of-Ashes-349e6578029f80efa8edc40cbe80b4f3)
+[시연 영상](https://youtu.be/r3E8gHR1bFk) · [Notion](https://app.notion.com/p/Codex-of-Ashes-349e6578029f80efa8edc40cbe80b4f3)
 
 ## 게임 소개
 
@@ -47,4 +47,3 @@ Unreal Engine 5.5 · C++ · Blueprint · Lyra Starter Game
 - [공개용 저장소](https://github.com/byam12/forpublic): 같은 프로젝트에서 외부 에셋과 비공개 자료 등을 제외해 별도로 정리한 공개본입니다. 인벤토리 코드만 분리한 저장소는 아닙니다.
 
 공개용 저장소는 단독 실행용 전체 프로젝트가 아닙니다. 사용하려면 Unreal Engine 5.5.4의 Lyra Starter Game에 파일을 적용하고, 필요한 외부 에셋을 적법하게 확보해야 합니다. 포함·제외 파일과 사용 조건은 해당 저장소의 README 및 `LICENSE.md`를 확인해 주세요.
-
